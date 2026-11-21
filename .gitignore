@@ -1,0 +1,5 @@
+/build/
+/StopWatchTourGuide/build/
+/.arduino/
+__pycache__/
+/tests/node_modules/

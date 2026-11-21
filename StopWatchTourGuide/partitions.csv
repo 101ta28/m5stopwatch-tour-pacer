@@ -1,0 +1,9 @@
+# 16 MiB flash. Keep Arduino's fixed OTA/app upload offsets; put the enlarged
+# NVS after the applications so both maximum-sized records can coexist.
+# Name, Type, SubType, Offset, Size, Flags
+otadata, data, ota, 0xe000, 0x2000,
+app0, app, ota_0, 0x10000, 0x600000,
+app1, app, ota_1, 0x610000, 0x600000,
+nvs, data, nvs, 0xc10000, 0x15000,
+spiffs, data, spiffs, 0xc25000, 0x3cb000,
+coredump, data, coredump, 0xff0000, 0x10000,
