@@ -44,6 +44,7 @@ node tests/course-page.cjs
 | コースの初期値とWi-Fi経由の編集 | [CourseConfig.h](../StopWatchTourGuide/CourseConfig.h)、[WifiCourseEditor.cpp](../StopWatchTourGuide/src/WifiCourseEditor.cpp)、[CoursePage.h](../StopWatchTourGuide/src/CoursePage.h) |
 | 完了記録の保存と復元 | [RecordStore.cpp](../StopWatchTourGuide/src/RecordStore.cpp) |
 
-開始時に内蔵時計から終了までの秒数を求め、その後は単調時計で経過時間を計ります。記録の単位はミリ秒です。画面では残り時間を秒単位で切り上げ、所要時間と超過時間は切り捨てます。[時刻の計算例と振動の条件](../stopwatch-tour-guide-spec.md)
+開始時に内蔵時計から終了までの秒数を求め、その後は単調時計で経過時間を計ります。記録の単位はミリ秒です。画面では残り時間を秒単位で切り上げ、所要時間と超過時間は切り捨てます。  
+[時刻の計算例と振動の条件](../stopwatch-tour-guide-spec.md)
 
 コース設定はNVSの `tour-guide` 名前空間の `course-v1` に保存します。案内の完了記録は、終了時に `record0` と `record1` の古い側へ書き込み、読み戻して検証します。起動時には、CRCが正しい記録のうち最新の有効な世代を使います。
