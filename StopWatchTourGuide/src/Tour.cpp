@@ -71,7 +71,7 @@ void Tour::enterSegment(size_t index, Millis now) {
   segment_ = index;
   const auto start = elapsed(now);
   record_.segments[index] = {true, start, start};
-  segmentWarned_ = false;
+  segmentWarned_ = segmentExpiryNotified_ = false;
 
   const int64_t availableMs = std::max<int64_t>(0, remainingMs(now));
   const auto& segments = record_.course.segments;
@@ -118,10 +118,14 @@ Outcome Tour::update(Millis now, Input input) {
   const auto overallWarningMs = int64_t(warnings_.overall) * 1000;
   // Consume all crossed thresholds, even if their notification loses priority.
   const int64_t segmentWarningMs = int64_t(warnings_.segment) * 1000;
-  if (!segmentWarned_ && segmentBudgetMs_ > segmentWarningMs &&
-      segmentRemainingMs(now) <= segmentWarningMs) {
+  const auto segmentLeft = segmentRemainingMs(now);
+  if (!segmentWarned_ && segmentBudgetMs_ > segmentWarningMs && segmentLeft <= segmentWarningMs) {
     segmentWarned_ = true;
     if (!overallWarned_ && left > overallWarningMs) out.notice = Notice::SegmentWarning;
+  }
+  if (!segmentExpiryNotified_ && segmentLeft <= 0) {
+    segmentExpiryNotified_ = true;
+    if (left > 0) out.notice = Notice::SegmentExpired;
   }
   if (!overallWarned_ && left <= overallWarningMs) {
     overallWarned_ = true;
@@ -153,10 +157,13 @@ Button::Event Button::update(bool pressed, Millis now) {
   }
   return e;
 }
+constexpr Millis expiryPulseMs = 160;
+constexpr Millis expiryPeriodMs = expiryPulseMs + 120;
 static Millis patternLength(Notice n) {
   switch (n) {
     case Notice::Confirm: return 80;
     case Notice::SegmentWarning: return 300;
+    case Notice::SegmentExpired: return 2 * expiryPeriodMs + expiryPulseMs;
     case Notice::OverallWarning: return 550;
     case Notice::Deadline: return 600;
     default: return 0;
@@ -180,6 +187,8 @@ uint8_t Haptics::output(Millis now) {
     began_ = now;
   }
   if (active_ == Notice::None) return 0;
+  if (active_ == Notice::SegmentExpired && (now - began_) % expiryPeriodMs >= expiryPulseMs)
+    return 0;
   if (active_ == Notice::OverallWarning && now - began_ >= 200 && now - began_ < 350)
     return 0;
   return active_ == Notice::Confirm ? 150 : 220;

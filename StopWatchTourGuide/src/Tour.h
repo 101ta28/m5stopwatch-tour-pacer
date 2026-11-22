@@ -28,7 +28,7 @@ struct Record {
 bool validCourse(const Course& course);
 bool validRecord(const Record& record);
 struct WarningTimes { int32_t overall = 120, segment = 30; };  // Seconds before the boundary.
-enum class Notice : uint8_t { None, Confirm, SegmentWarning, OverallWarning, Deadline };
+enum class Notice : uint8_t { None, Confirm, SegmentWarning, SegmentExpired, OverallWarning, Deadline };
 enum class StartError { None, Running, InvalidCourse, ClockUnset, InvalidDeadline };
 struct Input { bool aShort = false, aLong = false, bShort = false; };
 struct Outcome {
@@ -56,7 +56,7 @@ class Tour {
   size_t segment_ = 0;
   int64_t segmentBudgetMs_ = 0;
   bool running_ = false, overallWarned_ = false, deadlineNotified_ = false;
-  bool segmentWarned_ = false;
+  bool segmentWarned_ = false, segmentExpiryNotified_ = false;
 };
 
 // Called with the current button level, not edge events. No delay or busy wait.
@@ -75,8 +75,8 @@ class Haptics {
   void request(Notice notice, Millis now);
   uint8_t output(Millis now);  // Drive the motor only when this value changes.
   void stop() { active_ = Notice::None; confirmations_ = 0; }
-  void cancelSegmentWarning() {
-    if (active_ == Notice::SegmentWarning) active_ = Notice::None;
+  void cancelSegmentNotices() {
+    if (active_ == Notice::SegmentWarning || active_ == Notice::SegmentExpired) active_ = Notice::None;
   }
  private:
   Notice active_ = Notice::None;

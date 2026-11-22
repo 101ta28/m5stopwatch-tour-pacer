@@ -168,7 +168,11 @@ void proportionalSegments() {
     const Millis warning = ex.entry + ex.budget - 30000;
     app.update(warning - 1); CHECK(app.motor(warning - 1) == 0);
     app.update(warning); CHECK(app.motor(warning) == 220);
-    CHECK(app.view(ex.entry + ex.budget).segmentRemainingFraction == 0.0f);
+    const Millis expiry = ex.entry + ex.budget;
+    app.update(expiry - 1); CHECK(app.motor(expiry - 1) == 0);
+    app.update(expiry); CHECK(app.motor(expiry) == 220);
+    CHECK(app.view(expiry).segmentRemainingFraction == 0.0f);
+    app.update(expiry + 720); CHECK(app.motor(expiry + 720) == 0);
     CHECK(app.tour().record().course.segments[1].seconds == 420);
   }
 }
@@ -176,9 +180,10 @@ void budgetAtDeadline() {
   auto t = started();
   t.update(899875, next);
   CHECK(t.segmentBudgetMs() == 125);
-  t.update(900000, next);
+  CHECK(t.update(900000, next).notice == Notice::Deadline);
   CHECK(t.segmentBudgetMs() == 0 && t.segmentRemainingMs(900000) == 0);
-  t.update(901000, next);
+  CHECK(t.update(901000, next).notice == Notice::Confirm);
+  CHECK(t.update(901500).notice == Notice::None);
   CHECK(t.segmentBudgetMs() == 0 && t.segmentRemainingMs(901500) == -500);
 
   Course large{"長期", std::vector<Segment>(kMaxSegments, {"展示", INT32_MAX})};
@@ -204,7 +209,8 @@ void simultaneousWarnings() {
   t.update(120000,next); t.update(630000,next);
   CHECK(t.update(780000).notice==Notice::OverallWarning);
   CHECK(t.update(780001).notice==Notice::None);
-  CHECK(t.update(810000).notice==Notice::None);
+  CHECK(t.update(810000).notice==Notice::SegmentExpired);
+  CHECK(t.update(810001).notice==Notice::None);
 }
 void imminentStart() {
   auto t=started(14,14);
@@ -212,6 +218,7 @@ void imminentStart() {
   CHECK(t.update(0).notice==Notice::OverallWarning);
   CHECK(t.update(1,question).notice==Notice::Confirm);
   CHECK(t.record().questions[0].segment==0);
+  CHECK(t.update(8000).notice==Notice::SegmentExpired); // Too short for an advance warning.
   CHECK(t.update(59999).notice==Notice::None);
   CHECK(t.update(60000).notice==Notice::Deadline);
 }
@@ -345,6 +352,22 @@ void delayAndPriority() {
   CHECK(overlap.update(780000,question).notice==Notice::OverallWarning);
   CHECK(overlap.record().questions.size()==1);
 }
+void segmentExpiryPriority() {
+  auto t = started();
+  CHECK(t.update(120250, question).notice == Notice::SegmentExpired); // Missed the advance warning.
+  CHECK(t.record().questions.size() == 1 && t.segment() == 0);
+  CHECK(t.update(120251).notice == Notice::None);
+  auto switched = started();
+  CHECK(switched.update(120000, next).notice == Notice::Confirm);
+  auto finished = started();
+  CHECK(finished.update(120000, finish).notice == Notice::None);
+
+  Tour coincident;
+  CHECK(coincident.start({"案内", {{"展示", 780}, {"移動", 120}}},
+                         timeAt(14,0), true, timeAt(14,15), 0) == StartError::None);
+  CHECK(coincident.update(780000).notice == Notice::OverallWarning);
+  CHECK(coincident.update(780600).notice == Notice::None);
+}
 void shortAndLastSegments() {
   Tour t;
   CHECK(t.start({"short",{{"short",30},{"tiny",1}}},timeAt(14,0),true,timeAt(14,0,31),0,{1,30})==StartError::None);
@@ -376,7 +399,15 @@ void hapticPatterns() {
   CHECK(h.output(2360)>0); CHECK(h.output(2440)>0); CHECK(h.output(2520)==0);
   h.request(Notice::Deadline,2600); h.request(Notice::SegmentWarning,2610);
   CHECK(h.output(3200)==0); // No stale warning queued.
-  h.stop(); CHECK(h.output(4000)==0);
+  h.request(Notice::SegmentExpired,4000);
+  for (Millis pulse : {4000, 4280, 4560}) {
+    CHECK(h.output(pulse) == 220 && h.output(pulse + 159) == 220);
+    CHECK(h.output(pulse + 160) == 0 && h.output(pulse + 279) == 0);
+  }
+  h.request(Notice::OverallWarning,5000); h.request(Notice::SegmentExpired,5010);
+  CHECK(h.output(5200)==0 && h.output(5350)==220 && h.output(5550)==0);
+  h.request(Notice::SegmentExpired,5600);
+  h.stop(); CHECK(h.output(5601)==0);
 }
 void storageFailuresAndCorruption() {
   FakeBlobs blobs; RecordStore store(blobs);
@@ -520,6 +551,10 @@ void cancelPreviousSegmentVibration() {
   app.update(90000); CHECK(app.motor(90000)==220);
   app.update(90010,next); CHECK(app.motor(90010)==150);
   CHECK(app.motor(90090)==0);
+  const Millis expiry = 90010 + app.tour().segmentBudgetMs();
+  app.update(expiry); CHECK(app.motor(expiry) == 220);
+  tapAction(app, Action::NextSegment, expiry + 100);
+  CHECK(app.motor(expiry + 100) == 150 && app.motor(expiry + 280) == 0);
   app.update(780000); CHECK(app.motor(780000)==220);
   app.update(780010,next); // Global warning must keep playing across transitions.
   CHECK(app.motor(780010)==220);
@@ -717,6 +752,7 @@ int main() {
     {"日またぎと不正設定",midnightAndInvalidSettings},{"保存と復帰",persistenceAndReboot},
     {"同時入力の帰属",simultaneousInputs},{"長押し・チャタリング",longPressAndBounce},
     {"画面遷移をまたぐ長押し",holdAcrossScreens},{"処理遅延・通知優先",delayAndPriority},
+    {"区間超過の通知と優先順位",segmentExpiryPriority},
     {"短い区間・最終区間",shortAndLastSegments},{"振動パターンと割込み",hapticPatterns},
     {"保存失敗・全中断位置・破損",storageFailuresAndCorruption},{"レコードの検証",recordValidation},
     {"画面から再保存",retrySaveOnScreen},{"日時設定・振り返り操作",dateEditorAndReview},

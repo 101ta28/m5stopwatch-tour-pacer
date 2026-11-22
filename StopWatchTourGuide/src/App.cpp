@@ -79,7 +79,7 @@ void App::update(Millis now, Input input) {
     if (result.lastSegmentHint) message("Aを0.8秒長押しで終了", now);
     if (result.questionFull) message("質問記録が上限に達しました", now);
     if (result.notice == Notice::Deadline) deadlineBannerUntil_ = now + 3000;
-    if (result.segmentChanged) haptics_.cancelSegmentWarning();
+    if (result.segmentChanged) haptics_.cancelSegmentNotices();
     haptics_.request(result.notice, now);
     return;
   }
