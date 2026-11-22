@@ -622,7 +622,7 @@ void wifiEditedTour() {
 void snapshot(const std::string& name,const View& v) {
   std::ofstream out("build/"+name+".tsv");
   if (v.remainingPercent >= 0) out<<"ring\t"<<v.remainingPercent<<'\t'<<int(v.ringInk)<<'\n';
-  if (v.segmentCount) out<<"segments\t"<<v.segmentIndex<<'\t'<<v.segmentCount<<'\n';
+  if (v.segmentCount) out<<"segments\t"<<v.segmentIndex<<'\t'<<v.segmentCount<<'\t'<<v.segmentRemainingFraction<<'\n';
   for (const auto& b:v.boxes) out<<"box\t"<<b.x<<'\t'<<b.y<<'\t'<<b.width<<'\t'<<b.height<<'\t'<<int(b.ink)<<'\t'<<b.radius<<'\n';
   for (const auto& r:v.rows) out<<"text\t"<<r.x<<'\t'<<r.y<<'\t'<<r.size<<'\t'<<r.width<<'\t'<<int(r.ink)<<'\t'<<int(r.background)<<'\t'<<r.text<<'\n';
 }
@@ -635,9 +635,15 @@ void currentSegmentRing() {
     confirmDeadline(app);
     tapAction(app, Action::Start, 0);
     for (size_t i = 0; i < count; ++i) {
-      const auto view = app.view(i);
+      const Millis start = i * 2000;
+      const auto view = app.view(start);
       CHECK(view.segmentCount == count && view.segmentIndex == i);
-      if (i + 1 < count) tapAction(app, Action::NextSegment, i + 1);
+      CHECK(view.segmentRemainingFraction == 1.0f);
+      CHECK(app.view(start + 125).segmentRemainingFraction == 0.875f);
+      CHECK(app.view(start + 500).segmentRemainingFraction == 0.5f);
+      CHECK(app.view(start + 1000).segmentRemainingFraction == 0.0f);
+      CHECK(app.view(start + 1500).segmentRemainingFraction == 0.0f);
+      if (i + 1 < count) tapAction(app, Action::NextSegment, start + 2000);
     }
     app.update(901000, question);
     app.update(901001, next);
@@ -661,7 +667,9 @@ void uiSnapshots() {
   tapAction(app,Action::Save,0); snapshot("ready",app.view(0));
   tapAction(app,Action::Start,0); CHECK(app.screen()==Screen::Running);
   tapAction(app,Action::NextSegment,120000); tapAction(app,Action::NextSegment,600000);
-  snapshot("running",app.view(600000));
+  const auto running = app.view(720000);
+  CHECK(running.segmentRemainingFraction == 0.5f);
+  snapshot("running",running);
   app.update(961000); snapshot("overtime",app.view(961000));
   tapAction(app,Action::Question,961000); app.update(962000,finish);
   snapshot("review",app.view(970000));

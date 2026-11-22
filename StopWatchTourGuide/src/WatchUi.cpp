@@ -22,6 +22,7 @@ uint32_t color(Ink ink) {
     case Ink::Muted: return 0xb7bbc3;
     case Ink::Accent: return 0x68caff;
     case Ink::Segment: return 0xa6d980;
+    case Ink::SegmentTrack: return 0x526c44;
     case Ink::Warning: return 0xffb04e;
     case Ink::Surface: return 0x24262b;
     case Ink::Primary: return 0x77ceff;
@@ -31,19 +32,27 @@ uint32_t color(Ink ink) {
   }
 }
 
-void drawSegmentRing(lgfx::LGFXBase& canvas, size_t index, size_t count) {
-  if (count < 2) return;
+void drawSegmentRing(lgfx::LGFXBase& canvas, const View& view) {
+  if (view.segmentCount < 2) return;
   constexpr int radius = 207;
-  const float step = 360.0f / count;
-  const float start = -90.0f + index * step;
+  constexpr int gapRadius = 5;
+  constexpr float radiansPerDegree = 3.14159265f / 180.0f;
+  const float step = 360.0f / view.segmentCount;
   canvas.fillArc(233, 233, radius+1, radius-1, 0, 360, color(Ink::Track));
-  canvas.fillArc(233, 233, radius+2, radius-3, start, start+step, color(Ink::Segment));
-  // Cut gaps in a single track so that a 32-stop course still needs only two arcs.
-  for (size_t i = 0; i < count; ++i) {
-    const float angle = i * step * (3.14159265f / 180.0f);
+  for (size_t i = 0; i < view.segmentCount; ++i) {
+    const float angle = i * step * radiansPerDegree;
     const int x = 233 + std::lround(radius * std::sin(angle));
     const int y = 233 - std::lround(radius * std::cos(angle));
-    canvas.fillCircle(x, y, 5, color(Ink::Black));
+    canvas.fillCircle(x, y, gapRadius, color(Ink::Black));
+  }
+  // Map the remaining time to the visible arc between the two gaps.
+  constexpr float gapAngle = gapRadius / (radius * radiansPerDegree);
+  const float start = -90.0f + view.segmentIndex * step + gapAngle;
+  const float span = step - 2 * gapAngle;
+  canvas.fillArc(233, 233, radius+2, radius-3, start, start+span, color(Ink::SegmentTrack));
+  if (view.segmentRemainingFraction > 0) {
+    canvas.fillArc(233, 233, radius+2, radius-3, start,
+                   start + span * view.segmentRemainingFraction, color(Ink::Segment));
   }
 }
 
@@ -99,7 +108,7 @@ void drawWatchView(lgfx::LGFXBase& canvas, const View& view) {
     if (view.remainingPercent > 0)
       canvas.fillArc(233, 233, radius, radius-5, -90,
                      -90 + view.remainingPercent * 3.6f, color(view.ringInk));
-    drawSegmentRing(canvas, view.segmentIndex, view.segmentCount);
+    drawSegmentRing(canvas, view);
   }
   for (const auto& box : view.boxes)
     canvas.fillSmoothRoundRect(box.x, box.y, box.width, box.height, box.radius, color(box.ink));

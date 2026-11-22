@@ -59,6 +59,7 @@ View readView(const std::string& path) {
       view.ringInk = static_cast<Ink>(ink);
     } else if (kind == "segments") {
       fields >> view.segmentIndex >> view.segmentCount;
+      if (!fields.eof()) fields >> view.segmentRemainingFraction;
     } else {
       TextRow row;
       int bg;
@@ -103,6 +104,26 @@ void checkLabels(lgfx::LGFX_Sprite& canvas, const View& view) {
   }
 }
 
+void checkSegmentCountdown(lgfx::LGFX_Sprite& canvas) {
+  View view;
+  view.remainingPercent = 50;
+  view.segmentCount = 2; // The first segment occupies the right semicircle.
+  drawWatchView(canvas, view);
+  const auto full = canvas.readPixel(379, 87);
+  const auto inactive = canvas.readPixel(87, 87);
+  if (full == inactive || full != canvas.readPixel(379, 379))
+    throw std::runtime_error("New segment is not full");
+  view.segmentRemainingFraction = 0;
+  drawWatchView(canvas, view);
+  const auto empty = canvas.readPixel(379, 87);
+  if (empty == full || empty == inactive || empty != canvas.readPixel(379, 379))
+    throw std::runtime_error("Expired segment lost its position or still shows time");
+  view.segmentRemainingFraction = 0.5f;
+  drawWatchView(canvas, view);
+  if (canvas.readPixel(379, 87) != full || canvas.readPixel(379, 379) != empty)
+    throw std::runtime_error("Half of the current segment should be filled");
+}
+
 void checkRingClearance(lgfx::LGFX_Sprite& canvas, View rings) {
   if (rings.segmentCount < 2) return;
   const auto* pixels = static_cast<const uint16_t*>(canvas.getBuffer());
@@ -120,6 +141,7 @@ int main(int argc, char** argv) {
   lgfx::LGFX_Sprite canvas;
   canvas.setColorDepth(16);
   if (!canvas.createSprite(466,466)) return 1;
+  checkSegmentCountdown(canvas);
   for (int i = 1; i < argc; ++i) {
     const std::string stem = argv[i];
     const View view = readView(stem+".tsv");
