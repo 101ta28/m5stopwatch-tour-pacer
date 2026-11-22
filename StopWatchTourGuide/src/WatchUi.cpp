@@ -49,10 +49,11 @@ void drawSegmentRing(lgfx::LGFXBase& canvas, const View& view) {
   constexpr float gapAngle = gapRadius / (radius * radiansPerDegree);
   const float start = -90.0f + view.segmentIndex * step + gapAngle;
   const float span = step - 2 * gapAngle;
-  canvas.fillArc(233, 233, radius+2, radius-3, start, start+span, color(Ink::SegmentTrack));
+  const float end = start + span;
+  canvas.fillArc(233, 233, radius+2, radius-3, start, end, color(Ink::SegmentTrack));
   if (view.segmentRemainingFraction > 0) {
-    canvas.fillArc(233, 233, radius+2, radius-3, start,
-                   start + span * view.segmentRemainingFraction, color(Ink::Segment));
+    canvas.fillArc(233, 233, radius+2, radius-3,
+                   start + span * (1.0f - view.segmentRemainingFraction), end, color(Ink::Segment));
   }
 }
 
@@ -104,10 +105,11 @@ void drawWatchView(lgfx::LGFXBase& canvas, const View& view) {
   canvas.fillScreen(color(Ink::Black));
   if (view.remainingPercent >= 0) {
     constexpr int radius = 220;
+    constexpr float end = 270.0f; // Twelve o'clock.
     canvas.fillArc(233, 233, radius, radius-5, 0, 360, color(Ink::Track));
     if (view.remainingPercent > 0)
-      canvas.fillArc(233, 233, radius, radius-5, -90,
-                     -90 + view.remainingPercent * 3.6f, color(view.ringInk));
+      canvas.fillArc(233, 233, radius, radius-5, end - view.remainingPercent * 3.6f,
+                     end, color(view.ringInk));
     drawSegmentRing(canvas, view);
   }
   for (const auto& box : view.boxes)

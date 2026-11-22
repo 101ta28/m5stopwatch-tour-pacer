@@ -104,24 +104,39 @@ void checkLabels(lgfx::LGFX_Sprite& canvas, const View& view) {
   }
 }
 
-void checkSegmentCountdown(lgfx::LGFX_Sprite& canvas) {
+void checkClockwiseCountdown(lgfx::LGFX_Sprite& canvas) {
   View view;
-  view.remainingPercent = 50;
+  view.remainingPercent = 100;
   view.segmentCount = 2; // The first segment occupies the right semicircle.
   drawWatchView(canvas, view);
+  const auto overall = canvas.readPixel(450, 233);
+  if (canvas.readPixel(16, 233) != overall)
+    throw std::runtime_error("Overall ring should start full");
   const auto full = canvas.readPixel(379, 87);
   const auto inactive = canvas.readPixel(87, 87);
   if (full == inactive || full != canvas.readPixel(379, 379))
     throw std::runtime_error("New segment is not full");
+  view.remainingPercent = 0;
   view.segmentRemainingFraction = 0;
   drawWatchView(canvas, view);
+  const auto track = canvas.readPixel(450, 233);
+  if (track == overall || canvas.readPixel(16, 233) != track)
+    throw std::runtime_error("Expired overall ring still shows time");
   const auto empty = canvas.readPixel(379, 87);
   if (empty == full || empty == inactive || empty != canvas.readPixel(379, 379))
     throw std::runtime_error("Expired segment lost its position or still shows time");
+  view.remainingPercent = 50;
   view.segmentRemainingFraction = 0.5f;
   drawWatchView(canvas, view);
-  if (canvas.readPixel(379, 87) != full || canvas.readPixel(379, 379) != empty)
-    throw std::runtime_error("Half of the current segment should be filled");
+  if (canvas.readPixel(450, 233) != track || canvas.readPixel(16, 233) != overall)
+    throw std::runtime_error("Overall ring should empty clockwise from twelve");
+  if (canvas.readPixel(379, 87) != empty || canvas.readPixel(379, 379) != full)
+    throw std::runtime_error("First segment should empty clockwise from twelve");
+  view.segmentIndex = 1;
+  drawWatchView(canvas, view);
+  if (canvas.readPixel(379, 379) != inactive ||
+      canvas.readPixel(87, 379) != empty || canvas.readPixel(87, 87) != full)
+    throw std::runtime_error("Second segment should empty clockwise from six");
 }
 
 void checkRingClearance(lgfx::LGFX_Sprite& canvas, View rings) {
@@ -141,7 +156,7 @@ int main(int argc, char** argv) {
   lgfx::LGFX_Sprite canvas;
   canvas.setColorDepth(16);
   if (!canvas.createSprite(466,466)) return 1;
-  checkSegmentCountdown(canvas);
+  checkClockwiseCountdown(canvas);
   for (int i = 1; i < argc; ++i) {
     const std::string stem = argv[i];
     const View view = readView(stem+".tsv");
