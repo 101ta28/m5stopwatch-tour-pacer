@@ -18,35 +18,68 @@
 3. [StopWatchTourGuide.ino](../StopWatchTourGuide/StopWatchTourGuide.ino) を開き、ボードに `M5StopWatch` を選びます。16 MB Flash、8 MB OPI PSRAMの設定で「検証」を実行します。
 4. StopWatchをUSBで接続し、接続先のポートを選んで書き込みます。起動後、待機画面で現在日時を確認してください。
 
-## Arduino CLIを使う（Linux）
+## Arduino CLIを使う
 
-Bash、Python 3、Arduino CLIを用意し、リポジトリのルートで実行します。CLIがPATHにない場合は、環境変数 `ARDUINO_CLI` に実行ファイルのパスを指定してください。
+Windows、macOS、Linuxで、Python 3とArduino CLIを使って書き込めます。Arduino CLIをPATHに追加するか、環境変数 `ARDUINO_CLI` に実行ファイルのパスを指定してください。[Arduino CLIの導入手順](https://arduino.github.io/arduino-cli/1.6/installation/)
 
-1. 初回はボードパッケージとライブラリを導入し、ファームウェアをビルドします。依存ファイルは `.arduino/`、ビルド結果は `build/firmware/` に入ります。ソースを変更した後は2行目を再実行します。
+次のコマンドはリポジトリのルートで実行します。ボードパッケージとライブラリは `.arduino/`、ビルドしたファームウェアは `build/firmware/` に入ります。`setup` は初回に実行し、ソースを変更したら `build` を再実行します。
 
-   ```sh
-   ./scripts/setup-arduino.sh
-   ./scripts/build-board.sh
-   ```
+### Windows（PowerShell）
 
-2. StopWatchをダウンロードモードでUSB接続します。次のポート名を実際の接続先に置き換えて、書き込みます。
+Python 3の `py -3` と `arduino-cli` が使える状態で、次を実行します。pySerialは書き込み後の時刻同期、JSON設定、ログの取得に使います。
 
-   ```sh
-   ./scripts/upload-board.sh /dev/ttyACM0
-   ```
+```powershell
+py -3 -m pip install pyserial==3.5
+py -3 scripts/board.py setup
+py -3 scripts/board.py build
+```
 
-3. 「時刻同期完了」と表示されるまでUSBをつないでおきます。端末が自動で起動しないときは、電源ボタンを短く1回押してください。スクリプトがPCの現地日時を端末に設定し、読み戻した日時を表示します。
+StopWatchをダウンロードモードでUSB接続し、`ports` に表示されたポート名で書き込みます。以下の `COM3` は例です。
+
+```powershell
+py -3 scripts/board.py ports
+py -3 scripts/board.py upload COM3
+```
+
+### macOS・Linux（ターミナル）
+
+```sh
+python3 scripts/board.py setup
+python3 scripts/board.py build
+```
+
+StopWatchをダウンロードモードでUSB接続して `python3 scripts/board.py ports` の一覧を確認し、以下のポート名を実際の値に置き換えてください。
+
+```sh
+# macOS
+python3 scripts/board.py upload /dev/cu.usbmodem101
+# Linux
+python3 scripts/board.py upload /dev/ttyACM0
+```
+
+### 書き込み後の時刻同期
+
+「時刻同期完了」と表示されるまでUSBをつないでおきます。端末が自動で起動しないときは、電源ボタンを短く1回押してください。スクリプトがPCの現地日時を端末に設定し、読み戻した日時を表示します。
+
+ダウンロードモードと通常モードでポート名が異なる場合は、`upload COM3 --sync-port COM7` のように通常モードのポートも指定できます。書き込み完了後に同期だけ失敗したときは、通常モードで `ports` を再実行し、次の手順で時計を合わせます。
 
 ## 時計を合わせ直す
 
 本体で合わせるには、待機画面の「現在」をタップします。「年」「月」「日」「時」「分」を選び、「−」「＋」で合わせて「確定」を押すと、秒は00になります。
 
-LinuxでPCの時計に合わせるには、本体を通常モードの待機画面にしてUSB接続し、次を実行します。
+PCの時計に合わせるには、本体を通常モードの待機画面にしてUSB接続し、実際のポート名で次を実行します。
 
-```sh
-python3 scripts/sync-clock.py /dev/ttyACM0
-```
+| OS | コマンド例 |
+|---|---|
+| Windows | `py -3 scripts/sync-clock.py COM3` |
+| macOS | `python3 scripts/sync-clock.py /dev/cu.usbmodem101` |
+| Linux | `python3 scripts/sync-clock.py /dev/ttyACM0` |
 
 電源を切った後も内蔵時計はバッテリーを使います。バッテリーが切れて時計が止まったときは、充電後に合わせ直してください。
+
+
+## USBで起動ログを取る
+
+通常モードで `scripts/monitor-board.py` にポート名を渡すと、30秒間のログを `build/board-monitor.log` に保存します。Windowsでは `py -3 scripts/monitor-board.py COM3`、macOSでは `python3 scripts/monitor-board.py /dev/cu.usbmodem101` のように実行します。
 
 [案内を始める](../README.md#案内を始める)

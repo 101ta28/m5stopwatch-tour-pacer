@@ -6,11 +6,13 @@
 
 1. [設定例](../examples/course.json)をコピーし、案内に合わせて編集します。`name` はコース名、`segments` は案内する順に並べた区間です。各区間の `seconds` に目安秒数を指定します。`warnings.overall` は終了の何秒前に、`warnings.segment` は区間の目安の何秒前に振動するかを表します。
 2. 今回の終了日時を指定するときは、`deadline` を案内当日の現地日時に書き換えます。例えば `"deadline": "2026-12-01T14:15"` は12月1日14時15分です。コースだけを変更するときは、この項目を省略します。
-3. この機能を含む[ファームウェアを書き込み](setup.md)、本体の時計を確認します。本体を待機画面にしてLinuxのPCにUSB接続し、リポジトリのルートで次を実行します。ポート名とファイル名は手元のものに置き換えてください。
+3. この機能を含む[ファームウェアを書き込み](setup.md)、本体の時計を確認します。待機画面でPCにUSB接続し、リポジトリのルートで次のコマンドを実行します。ポート名とファイル名は手元のものに置き換えてください。
 
-   ```sh
-   python3 scripts/sync-course.py /dev/ttyACM0 course.json
-   ```
+   | OS | コマンド例 |
+   |---|---|
+   | Windows | `py -3 scripts/sync-course.py COM3 course.json` |
+   | macOS | `python3 scripts/sync-course.py /dev/cu.usbmodem101 course.json` |
+   | Linux | `python3 scripts/sync-course.py /dev/ttyACM0 course.json` |
 
 4. 保存完了の表示が出たら、本体の「コース配分」で区間を確認できます。`deadline` も送った場合は、待機画面の終了予定を確認して「案内を開始」をタップします。
 

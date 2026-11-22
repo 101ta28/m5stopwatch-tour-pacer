@@ -6,7 +6,6 @@ import json
 from pathlib import Path
 import re
 import sys
-import termios
 import time
 
 from tour_usb import exchange, with_device
@@ -77,9 +76,9 @@ def encode_course(course):
 
 
 def synchronize(port, body, deadline, timeout=40):
-    def upload(fd, until):
+    def upload(device, until):
         def request(command, reply, errors=ERRORS):
-            return exchange(fd, b"TOUR COURSE " + command, reply,
+            return exchange(device, b"TOUR COURSE " + command, reply,
                             min(until, time.monotonic() + 2), errors) == reply
 
         # A disconnect can leave half a command before BEGIN. Ignore that
@@ -101,15 +100,15 @@ def synchronize(port, body, deadline, timeout=40):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("port", help="USBシリアルポート（例 /dev/ttyACM0）")
+    parser.add_argument("port", help="USBシリアルポート（例 COM3、/dev/cu.usbmodem101、/dev/ttyACM0）")
     parser.add_argument("file", type=Path, help="UTF-8のコース設定JSON")
     args = parser.parse_args()
     try:
-        course = json.loads(args.file.read_text(encoding="utf-8"))
+        course = json.loads(args.file.read_text(encoding="utf-8-sig"))
         body, deadline = encode_course(course)
         print(f"{args.port} で待機中の本体に設定を送ります。", flush=True)
         synchronize(args.port, body, deadline)
-    except (OSError, termios.error, ValueError) as error:
+    except (OSError, ValueError) as error:
         sys.exit(f"設定を完了できませんでした。{error}")
     print(f"コース「{course['name']}」を本体に保存しました。")
     if deadline is not None:

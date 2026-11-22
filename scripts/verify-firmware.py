@@ -23,7 +23,7 @@ def require(condition, message):
 def main():
     expected = {}
     source = ROOT / "StopWatchTourGuide" / "partitions.csv"
-    for row in csv.reader(source.read_text().splitlines()):
+    for row in csv.reader(source.read_text(encoding="utf-8").splitlines()):
         if not row or row[0].lstrip().startswith("#"):
             continue
         name, kind, subtype, offset, size, *_ = (cell.strip() for cell in row)
@@ -61,7 +61,7 @@ def main():
         (0x8000, FIRMWARE / f"{STEM}.partitions.bin"),
         (actual["app0"][0], FIRMWARE / f"{STEM}.bin"),
     ]
-    options = json.loads((BUILD / "build.options.json").read_text())
+    options = json.loads((BUILD / "build.options.json").read_bytes())
     platform = Path(options["hardwareFolders"].split(",")[0])
     files.append((actual["otadata"][0], platform / "tools" / "partitions" / "boot_app0.bin"))
     for offset, path in files:

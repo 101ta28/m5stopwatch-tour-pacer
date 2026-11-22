@@ -3,7 +3,6 @@
 import argparse
 from datetime import datetime, timedelta
 import sys
-import termios
 import time
 
 from tour_usb import exchange, with_device
@@ -17,10 +16,10 @@ ERRORS = {
 }
 
 
-def set_clock(fd, deadline):
+def set_clock(device, deadline):
     # Only sample the PC clock after the application answers.
     # Time spent in the bootloader or waiting for USB is excluded.
-    ready = exchange(fd, b"TOUR TIME?", b"TOUR TIME READY",
+    ready = exchange(device, b"TOUR TIME?", b"TOUR TIME READY",
                      min(deadline, time.monotonic() + 1), ERRORS)
     if ready != b"TOUR TIME READY":
         return None
@@ -29,7 +28,7 @@ def set_clock(fd, deadline):
         raise ValueError("PCの現地日時を2000〜2099年に設定してください。")
     seconds = (local - EPOCH) // timedelta(seconds=1)
     prefix = b"TOUR TIME OK "
-    reply = exchange(fd, f"TOUR TIME {seconds}".encode(), prefix,
+    reply = exchange(device, f"TOUR TIME {seconds}".encode(), prefix,
                      min(deadline, time.monotonic() + 1.5), ERRORS)
     if reply is None:
         return None
@@ -51,6 +50,6 @@ if __name__ == "__main__":
     print(f"{port} で時刻同期を待っています。自動で起動しない場合は電源ボタンを短く1回押してください。", flush=True)
     try:
         result = synchronize(port)
-    except (OSError, termios.error, ValueError) as error:
+    except (OSError, ValueError) as error:
         sys.exit(f"時刻同期を完了できませんでした。{error}")
     print(f"時刻同期完了　端末の現在日時 {result:%Y/%m/%d %H:%M:%S}")

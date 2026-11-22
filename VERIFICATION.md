@@ -27,6 +27,12 @@ PC上では、Arduinoに依存しない計時・入力判定・通知・画面�
 
 LeakSanitizerは、実行環境のプロセス制限により `LeakSanitizer does not work under ptrace` で停止しました。そのためリーク検査のみ無効にしています。ASanのメモリ検査とUBSanは有効です。`./scripts/test.sh` は各テストの結果を端末に表示し、`python3 scripts/preview.py` は画面プレビューを `build/ui-preview.png` に出力します。
 
+## Windows・macOS向け開発ツールの検証
+
+Linuxで共通の `board.py build` によるC152向けビルドと画像検査、ホストテスト35件、仮想USBを使った時刻同期・コース設定を確認しました。Arduino CLIの書き込み操作を模擬し、書き込み成功時は指定した通常モードのポートで同期し、失敗時は終了コードを返すことも確認しました。
+
+MinGW-w64を使い、ホストテストとSDL2プレビューをWindows x64用の実行ファイルとしてクロスコンパイルしました。Linux上では、模擬COMポートを通したJSON設定と、SDL2を使った9画面の描画・配置検査が通りました。Windows・macOS上での実行と、両OSからの実機書き込みは未確認です。
+
 ## 仕様の受け入れケース
 
 | 仕様のケース | テスト関数 | 確認内容 |
