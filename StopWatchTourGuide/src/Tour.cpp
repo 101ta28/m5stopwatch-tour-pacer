@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdio>
 #include <limits>
+#include <utility>
 
 namespace tour {
 bool validCourse(const Course& c) {
@@ -13,11 +14,13 @@ bool validCourse(const Course& c) {
   return true;
 }
 bool validRecord(const Record& r) {
-  if (r.version != kRecordVersion || !validCourse(r.course) ||
-      r.segments.size() != r.course.segments.size() || r.questions.size() > kMaxQuestions ||
-      r.started < toSeconds({2000, 1, 1, 0, 0, 0}) ||
-      r.deadline <= r.started || r.deadline > toSeconds({2099, 12, 31, 23, 59, 59}) ||
-      r.elapsed > static_cast<Millis>((toSeconds({2100,1,1,0,0,0}) - r.started) * 1000)) return false;
+  if (!validCourse(r.course) || r.segments.size() != r.course.segments.size() ||
+      r.questions.size() > kMaxQuestions) return false;
+  if (r.version == kDurationRecordVersion) {
+    if (r.durationSeconds <= 0 || r.started || r.deadline || r.elapsed > INT64_MAX) return false;
+  } else if (r.version != kRecordVersion || r.durationSeconds != 0 || r.started < 0 ||
+             r.deadline <= r.started || r.deadline > toSeconds({2099,12,31,23,59,59}) ||
+             r.elapsed > static_cast<Millis>((toSeconds({2100,1,1,0,0,0}) - r.started) * 1000)) return false;
   Millis end = 0;
   bool unvisited = false;
   for (size_t i = 0; i < r.segments.size(); ++i) {
@@ -42,16 +45,27 @@ bool validRecord(const Record& r) {
 }
 StartError Tour::start(const Course& c, LocalSeconds now, bool clockSet,
                       LocalSeconds deadline, Millis monotonic, WarningTimes warnings) {
+  Record timing;
+  timing.started = clockSet ? now : -1;
+  timing.deadline = deadline;
+  return beginRun(c, std::move(timing), monotonic, warnings);
+}
+StartError Tour::startFor(const Course& c, int32_t seconds, Millis monotonic, WarningTimes warnings) {
+  Record timing;
+  timing.version = kDurationRecordVersion;
+  timing.durationSeconds = seconds;
+  return beginRun(c, std::move(timing), monotonic, warnings);
+}
+StartError Tour::beginRun(const Course& c, Record timing, Millis monotonic, WarningTimes warnings) {
   if (running_) return StartError::Running;
   if (!validCourse(c) || warnings.overall <= 0 || warnings.segment <= 0) return StartError::InvalidCourse;
-  if (!clockSet || now < toSeconds({2000, 1, 1, 0, 0, 0}) ||
-      now > toSeconds({2099, 12, 31, 23, 59, 59})) return StartError::ClockUnset;
-  if (deadline <= now || deadline > toSeconds({2099, 12, 31, 23, 59, 59}))
-    return StartError::InvalidDeadline;
-  record_ = Record{};
+  if (timing.version == kRecordVersion) {
+    const auto last = toSeconds({2099,12,31,23,59,59});
+    if (timing.started < 0 || timing.started > last) return StartError::ClockUnset;
+    if (timing.deadline <= timing.started || timing.deadline > last) return StartError::InvalidDeadline;
+  } else if (timing.durationSeconds <= 0) return StartError::InvalidDeadline;
+  record_ = std::move(timing);
   record_.course = c;
-  record_.started = now;
-  record_.deadline = deadline;
   record_.segments.resize(c.segments.size());
   record_.questions.reserve(kMaxQuestions);
   warnings_ = warnings;
@@ -65,7 +79,7 @@ Millis Tour::elapsed(Millis now) const {
   return running_ ? (now >= origin_ ? now - origin_ : 0) : record_.elapsed;
 }
 int64_t Tour::remainingMs(Millis now) const {
-  return (record_.deadline - record_.started) * 1000 - static_cast<int64_t>(elapsed(now));
+  return record_.plannedSeconds() * 1000 - static_cast<int64_t>(elapsed(now));
 }
 void Tour::enterSegment(size_t index, Millis now) {
   segment_ = index;

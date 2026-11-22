@@ -5,7 +5,7 @@
 namespace tour {
 struct GuideSettings { Course course; WarningTimes warnings; };
 struct WifiAccess { std::string ssid, password, url; };
-enum class CourseSave { Saved, Invalid, Failed, ClockUnset, InvalidDeadline };
+enum class CourseSave { Saved, Invalid, Failed, ClockUnset, InvalidDeadline, InvalidDuration };
 
 class CourseEditor {
  public:

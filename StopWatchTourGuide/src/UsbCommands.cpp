@@ -71,17 +71,21 @@ std::string UsbCommands::courseCommand(std::string_view command, App& app) {
   const auto split = command.find(' ');
   if (split == command.npos || command.substr(split + 1) != std::to_string(courseText_.size()))
     return "TOUR COURSE INVALID";
-  std::optional<LocalSeconds> deadline;
-  if (command.substr(0, split) != "-") {
-    LocalSeconds seconds;
-    if (!readSeconds(command.substr(0, split), seconds)) return "TOUR COURSE DEADLINE";
-    deadline = seconds;
+  StartPlan plan;
+  auto timing = command.substr(0, split);
+  if (!timing.empty() && timing.front() == '+') {
+    plan.mode = TimingMode::Duration;
+    if (!readSeconds(timing.substr(1), plan.seconds)) return "TOUR COURSE DURATION";
+  } else if (timing != "-") {
+    plan.mode = TimingMode::Deadline;
+    if (!readSeconds(timing, plan.seconds)) return "TOUR COURSE DEADLINE";
   }
-  switch (app.saveCourse(courseText_, deadline)) {
+  switch (app.saveCourse(courseText_, plan)) {
     case CourseSave::Saved: return "TOUR COURSE OK";
     case CourseSave::Invalid: return "TOUR COURSE INVALID";
     case CourseSave::ClockUnset: return "TOUR COURSE CLOCK";
     case CourseSave::InvalidDeadline: return "TOUR COURSE DEADLINE";
+    case CourseSave::InvalidDuration: return "TOUR COURSE DURATION";
     default: return "TOUR COURSE FAILED";
   }
 }

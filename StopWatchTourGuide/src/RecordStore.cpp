@@ -68,8 +68,12 @@ std::vector<uint8_t> encodeRecord(const Record& r, uint64_t generation) {
   w.number(kMagic, 4);
   w.number(r.version, 4);
   w.number(generation, 8);
-  w.number(r.deadline, 8);
-  w.number(r.started, 8);
+  if (r.version == kDurationRecordVersion) {
+    w.number(r.durationSeconds, 4);
+  } else {
+    w.number(r.deadline, 8);
+    w.number(r.started, 8);
+  }
   w.number(r.elapsed, 8);
   w.string(r.course.name);
   w.number(r.segments.size(), 2);
@@ -99,10 +103,16 @@ bool decodeRecord(const std::vector<uint8_t>& bytes, Record& result, uint64_t& g
   Record value;
   value.version = r.number(4);
   const auto gen = r.number(8);
-  const auto deadline = r.number(8), started = r.number(8);
-  if (deadline > uint64_t(INT64_MAX) || started > uint64_t(INT64_MAX)) return false;
-  value.deadline = static_cast<int64_t>(deadline);
-  value.started = static_cast<int64_t>(started);
+  if (value.version == kDurationRecordVersion) {
+    const auto seconds = r.number(4);
+    if (!seconds || seconds > INT32_MAX) return false;
+    value.durationSeconds = static_cast<int32_t>(seconds);
+  } else if (value.version == kRecordVersion) {
+    const auto deadline = r.number(8), started = r.number(8);
+    if (deadline > uint64_t(INT64_MAX) || started > uint64_t(INT64_MAX)) return false;
+    value.deadline = static_cast<int64_t>(deadline);
+    value.started = static_cast<int64_t>(started);
+  } else return false;
   value.elapsed = r.number(8);
   value.course.name = r.string();
   const auto count = r.number(2);

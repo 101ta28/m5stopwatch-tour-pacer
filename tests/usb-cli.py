@@ -122,6 +122,20 @@ def main():
         course["deadline"] = "2000-01-01T00:00"
         upload("本体の現在日時より後", False)
         del course["deadline"]
+        course["durationSeconds"] = 900
+        upload("持ち時間を 900 秒")
+        course["deadline"] = "2028-02-29T00:15"
+        upload("どちらか一方", False)
+        full_course = course
+        course = {"durationSeconds": 1}
+        upload("持ち時間を 1 秒")
+        for invalid in (0, -1, 1.5, True, "900", None, 2147483648):
+            course["durationSeconds"] = invalid
+            upload("durationSeconds", False)
+        course["durationSeconds"] = 2147483647
+        upload("持ち時間を 2147483647 秒")
+        course = full_course
+        del course["deadline"], course["durationSeconds"]
         course["name"] = "あ" * 32
         course["segments"] = [{"name": course["name"], "seconds": 2147483647}] * 32
         upload("本体に保存しました")

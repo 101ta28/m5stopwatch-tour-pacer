@@ -1,0 +1,9 @@
+{
+  "name": "発表",
+  "durationSeconds": 900,
+  "warnings": { "overall": 120, "segment": 30 },
+  "segments": [
+    { "name": "発表", "seconds": 720 },
+    { "name": "質疑応答", "seconds": 180 }
+  ]
+}

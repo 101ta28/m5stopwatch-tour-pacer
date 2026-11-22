@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""待機中のStopWatchに、JSONのコースと終了日時をUSBで設定します。"""
+"""待機中のStopWatchに、JSONのコースと終了日時または持ち時間をUSBで設定します。"""
 import argparse
 from datetime import datetime
 import json
@@ -16,6 +16,7 @@ ERRORS = {
     b"TOUR COURSE INVALID": "本体がコース設定を受け付けませんでした。",
     b"TOUR COURSE FAILED": "本体にコースを保存できませんでした。",
     b"TOUR COURSE DEADLINE": "終了日時を本体の現在日時より後に設定してください。",
+    b"TOUR COURSE DURATION": "持ち時間は1〜2147483647秒で指定してください。",
     b"TOUR COURSE CLOCK": "先に本体の現在日時を設定してください。",
 }
 
@@ -56,7 +57,16 @@ def deadline_seconds(value):
 
 
 def encode_course(course):
-    fields(course, "JSON", ("name", "warnings", "segments"), ("deadline",))
+    if isinstance(course, dict) and "deadline" in course and "durationSeconds" in course:
+        raise ValueError("deadline と durationSeconds はどちらか一方を指定してください。")
+    if isinstance(course, dict) and course.keys() == {"durationSeconds"}:
+        return b"", "+" + str(seconds(course["durationSeconds"], "durationSeconds"))
+    fields(course, "JSON", ("name", "warnings", "segments"), ("deadline", "durationSeconds"))
+    timing = "-"
+    if "durationSeconds" in course:
+        timing = "+" + str(seconds(course["durationSeconds"], "durationSeconds"))
+    elif "deadline" in course:
+        timing = str(deadline_seconds(course["deadline"]))
     warnings = course["warnings"]
     fields(warnings, "warnings", ("overall", "segment"))
     overall = seconds(warnings["overall"], "warnings.overall")
@@ -71,11 +81,10 @@ def encode_course(course):
         duration = seconds(item["seconds"], f"{path}.seconds")
         label = name(item["name"], f"{path}.name")
         lines.append(f"{duration}\t{label}")
-    deadline = deadline_seconds(course["deadline"]) if "deadline" in course else None
-    return "\n".join(lines).encode(), deadline
+    return "\n".join(lines).encode(), timing
 
 
-def synchronize(port, body, deadline, timeout=40):
+def synchronize(port, body, timing, timeout=40):
     def upload(device, until):
         def request(command, reply, errors=ERRORS):
             return exchange(device, b"TOUR COURSE " + command, reply,
@@ -87,11 +96,10 @@ def synchronize(port, body, deadline, timeout=40):
         if not request(b"BEGIN", b"TOUR COURSE READY", {busy: ERRORS[busy]}):
             return None
         # Wait for each line so the device's small USB receive queue cannot overflow.
-        for line in body.split(b"\n"):
+        for line in body.splitlines():
             if not request(b"LINE " + line, b"TOUR COURSE NEXT"):
                 return None
-        stamp = "-" if deadline is None else str(deadline)
-        if request(f"SAVE {stamp} {len(body)}".encode(), b"TOUR COURSE OK"):
+        if request(f"SAVE {timing} {len(body)}".encode(), b"TOUR COURSE OK"):
             return True
         return None
 
@@ -105,11 +113,14 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         course = json.loads(args.file.read_text(encoding="utf-8-sig"))
-        body, deadline = encode_course(course)
+        body, timing = encode_course(course)
         print(f"{args.port} で待機中の本体に設定を送ります。", flush=True)
-        synchronize(args.port, body, deadline)
+        synchronize(args.port, body, timing)
     except (OSError, ValueError) as error:
         sys.exit(f"設定を完了できませんでした。{error}")
-    print(f"コース「{course['name']}」を本体に保存しました。")
-    if deadline is not None:
+    if "name" in course:
+        print(f"コース「{course['name']}」を本体に保存しました。")
+    if "deadline" in course:
         print(f"今回の終了日時を {course['deadline'].replace('T', ' ')} に設定しました。")
+    elif "durationSeconds" in course:
+        print(f"持ち時間を {course['durationSeconds']} 秒に設定しました。")

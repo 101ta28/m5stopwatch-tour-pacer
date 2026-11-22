@@ -55,7 +55,8 @@ exe = cache / ("render.exe" if os.name == "nt" else "render")
 if not exe.exists() or any(p.stat().st_mtime > exe.stat().st_mtime for p in objects):
     subprocess.run([cxx, linker, *objects, *libs, "-o", exe], check=True)
 screens = {"standby":"開始準備", "editor":"終了時刻の設定", "ready":"開始", "course":"コース配分",
-           "wifi":"Wi-Fiで設定", "running":"案内中", "overtime":"終了超過", "review":"振り返り", "questions":"質問記録"}
+           "wifi":"Wi-Fiで設定", "running":"案内中", "overtime":"終了超過", "review":"振り返り", "questions":"質問記録",
+           "duration-editor":"持ち時間の設定", "duration-ready":"発表の開始", "duration-review":"発表の振り返り"}
 subprocess.run([exe, *screens], cwd=build, check=True)
 sheet = Image.new("RGB", (466*3, 506*((len(screens)+2)//3)), "#17181c")
 mask = Image.new("L", (466,466), 0)

@@ -7,6 +7,7 @@ namespace tour {
 using Millis = uint64_t;
 using LocalSeconds = int64_t;  // Local civil time, deliberately independent of TZ/DST.
 constexpr uint32_t kRecordVersion = 1;
+constexpr uint32_t kDurationRecordVersion = 2;
 constexpr size_t kMaxSegments = 32;
 constexpr size_t kMaxQuestions = 1024;
 struct Segment { std::string name; int32_t seconds; };
@@ -17,12 +18,14 @@ struct Record {
   uint32_t version = kRecordVersion;
   Course course;
   LocalSeconds deadline = 0, started = 0;
+  int32_t durationSeconds = 0;  // Duration runs record elapsed time without calendar timestamps.
   Millis elapsed = 0;
   std::vector<SegmentResult> segments;
   std::vector<Question> questions;
   LocalSeconds ended() const { return started + static_cast<int64_t>(elapsed / 1000); }
+  int64_t plannedSeconds() const { return durationSeconds ? durationSeconds : deadline - started; }
   int64_t deadlineDifferenceMs() const {
-    return static_cast<int64_t>(elapsed) - (deadline - started) * 1000;
+    return static_cast<int64_t>(elapsed) - plannedSeconds() * 1000;
   }
 };
 bool validCourse(const Course& course);
@@ -39,6 +42,7 @@ class Tour {
  public:
   StartError start(const Course&, LocalSeconds now, bool clockSet,
                    LocalSeconds deadline, Millis monotonic, WarningTimes warnings = {});
+  StartError startFor(const Course&, int32_t seconds, Millis monotonic, WarningTimes warnings = {});
   // Inputs are processed before notices. B is applied before A.
   Outcome update(Millis now, Input input = {});
   bool running() const { return running_; }
@@ -49,6 +53,7 @@ class Tour {
   int64_t segmentBudgetMs() const { return segmentBudgetMs_; }
   int64_t segmentRemainingMs(Millis now) const;
  private:
+  StartError beginRun(const Course&, Record timing, Millis monotonic, WarningTimes);
   void enterSegment(size_t index, Millis now);
   Record record_;
   WarningTimes warnings_;

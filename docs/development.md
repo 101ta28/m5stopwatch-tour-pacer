@@ -24,7 +24,7 @@ WindowsのテストはMinGW-w64で実行ファイルを作成し、模擬COMポ�
 | macOS | Homebrewで `brew install sdl2-compat` を実行し、`export SDL2_ROOT="$(brew --prefix sdl2-compat)"` を設定 | `python3 scripts/preview.py` |
 | Linux | M5GFXのLinuxフレームバッファ用コードを使用 | `python3 scripts/preview.py` |
 
-実機と同じ描画コードとフォントで9画面を描画し、文字の重なりや円周での見切れを検査します。一覧は `build/ui-preview.png` に出力します。字形を更新するときは、Regular・Medium・BoldのTTCをそろえ、同じPythonで `scripts/make-ui-fonts.py` を実行します。
+実機と同じ描画コードとフォントで各画面を描画し、文字の重なりや円周での見切れを検査します。一覧は `build/ui-preview.png` に出力します。字形を更新するときは、Regular・Medium・BoldのTTCをそろえ、同じPythonで `scripts/make-ui-fonts.py` を実行します。
 
 ## Wi-Fi設定画面をブラウザーでテストする
 
@@ -48,7 +48,8 @@ node tests/course-page.cjs
 | コースの初期値とWi-Fi経由の編集 | [CourseConfig.h](../StopWatchTourGuide/CourseConfig.h)、[WifiCourseEditor.cpp](../StopWatchTourGuide/src/WifiCourseEditor.cpp)、[CoursePage.h](../StopWatchTourGuide/src/CoursePage.h) |
 | 完了記録の保存と復元 | [RecordStore.cpp](../StopWatchTourGuide/src/RecordStore.cpp) |
 
-開始時に内蔵時計から終了までの秒数を求め、その後は単調時計で経過時間を計ります。記録の単位はミリ秒です。画面では残り時間を秒単位で切り上げ、所要時間と超過時間は切り捨てます。  
+終了日時を指定した場合は開始時に内蔵時計から終了までの秒数を求めます。持ち時間を指定した場合は、その秒数を開始時の残り時間として使います。いずれも単調時計で経過時間を計り、ミリ秒単位で記録します。画面では残り時間を秒単位で切り上げ、所要時間と超過時間は切り捨てます。
+
 [時刻の計算例と振動の条件](../stopwatch-tour-guide-spec.md)
 
 コース設定はNVSの `tour-guide` 名前空間の `course-v1` に保存します。案内の完了記録は、終了時に `record0` と `record1` の古い側へ書き込み、読み戻して検証します。起動時には、CRCが正しい記録のうち最新の有効な世代を使います。

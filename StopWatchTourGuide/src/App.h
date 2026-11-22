@@ -1,6 +1,5 @@
 #pragma once
 #include "CourseEditor.h"
-#include <optional>
 
 namespace tour {
 class Clock {
@@ -9,11 +8,13 @@ class Clock {
   virtual bool read(LocalSeconds& now) = 0;
   virtual bool set(const DateTime&) = 0;
 };
-enum class Screen { Standby, Running, Review, EditDeadline, EditClock, CoursePlan, WifiEdit };
+enum class TimingMode { Unset, Deadline, Duration };
+struct StartPlan { TimingMode mode = TimingMode::Unset; int64_t seconds = 0; };
+enum class Screen { Standby, Running, Review, EditDeadline, EditClock, CoursePlan, WifiEdit, EditDuration };
 enum class Ink { Normal, Muted, Accent, Warning, Surface, Primary, OnPrimary, Track, Black, Segment, SegmentTrack };
 enum class Action { None, Clock, Deadline, Start, Course, Records, Back, Save, Retry,
-                    PreviousValue, NextValue, Year, Month, Day, Hour, Minute,
-                    NextSegment, Question, NextPage, WifiEdit };
+                    PreviousValue, NextValue, Year, Month, Day, Hour, Minute, Second,
+                    NextSegment, Question, NextPage, WifiEdit, Duration };
 struct TextRow {
   std::string text;
   int x, y, size, width;
@@ -36,7 +37,7 @@ class App {
   App(Course course, Clock& clock, RecordStore& store, CourseEditor& editor);
   void begin();
   bool syncClock(LocalSeconds requested, LocalSeconds& verified);
-  CourseSave saveCourse(std::string_view text, std::optional<LocalSeconds> deadline);
+  CourseSave saveCourse(std::string_view text, StartPlan plan);
   void update(Millis now, Input input = {});
   void tap(int x, int y, Millis now);
   void releaseTouch(int startX, int startY, int endX, int endY, Millis now);
@@ -47,7 +48,7 @@ class App {
   Screen screen() const { return screen_; }
   const Tour& tour() const { return tour_; }
   bool unsaved() const { return unsaved_; }
-  bool deadlineConfirmed() const { return deadlineConfirmed_; }
+  bool deadlineConfirmed() const { return plan_.mode == TimingMode::Deadline; }
  private:
   GuideSettings settings_;
   Clock& clock_;
@@ -58,8 +59,9 @@ class App {
   Haptics haptics_;
   Screen screen_ = Screen::Standby;
   Record review_;
-  bool haveReview_ = false, unsaved_ = false, deadlineConfirmed_ = false;
-  LocalSeconds deadline_ = 0;
+  bool haveReview_ = false, unsaved_ = false;
+  StartPlan plan_;
+  int32_t editDuration_ = 0;
   DateTime edit_;
   int field_ = 0;
   size_t reviewPage_ = 0, questionOffset_ = 0, courseOffset_ = 0;
@@ -68,7 +70,7 @@ class App {
   void message(const std::string&, Millis now);
   void openEditor(bool clock, Millis now);
   void changeField(int direction);
-  void confirmDate(Millis now);
+  void confirmTime(Millis now);
   void saveResult(Millis now);
 };
 }  // namespace tour

@@ -697,6 +697,23 @@ void usbCourseSettings() {
   stage(); CHECK(command(save) == "TOUR COURSE FAILED");
   CHECK(!app.deadlineConfirmed() && hasText(app.view(0), "施設案内") && editor.saved.course.name.empty());
   editor.available = true;
+  rtc.valid = false;
+  stage(); CHECK(command("SAVE +900 " + length) == "TOUR COURSE OK");
+  CHECK(hasText(app.view(0), "15:00") && settingsText(editor.saved) == body);
+  for (const auto* token : {"+0", "+2147483648", "+1.5", "++1", "+", "+-5"}) {
+    stage(); CHECK(command(std::string("SAVE ") + token + " " + length) == "TOUR COURSE DURATION");
+  }
+  CHECK(hasText(app.view(0), "15:00"));
+  stage(); CHECK(command("SAVE - " + length) == "TOUR COURSE OK");
+  CHECK(hasText(app.view(0), "15:00"));
+  // Set just the duration, even when course storage cannot be written.
+  editor.available = false;
+  CHECK(command("BEGIN") == "TOUR COURSE READY");
+  CHECK(command("SAVE +90 0") == "TOUR COURSE OK");
+  CHECK(hasText(app.view(0), "01:30") && hasText(app.view(0), "夜の案内"));
+  stage(); CHECK(command("SAVE +60 " + length) == "TOUR COURSE FAILED");
+  CHECK(hasText(app.view(0), "01:30"));
+  rtc.valid = editor.available = true;
   stage(); CHECK(command(save) == "TOUR COURSE OK");
   CHECK(settingsText(editor.saved) == body && app.deadlineConfirmed());
   CHECK(hasText(app.view(0), "2026/11/21") && hasText(app.view(0), "00:15"));
@@ -706,6 +723,56 @@ void usbCourseSettings() {
   CHECK(command("BEGIN") == "TOUR COURSE BUSY");
   App reboot(configuredCourse(), rtc, store, editor); reboot.begin();
   CHECK(hasText(reboot.view(0), "夜の案内") && !reboot.deadlineConfirmed());
+}
+void presentationTiming() {
+  FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc; FakeEditor editor;
+  CHECK(store.save(completed())); // The preceding slot has an absolute-date record.
+  rtc.valid = false;
+  Course course{"発表", {{"導入", 10}, {"質疑", 20}}};
+  App app(course, rtc, store, editor); app.begin();
+  tapAction(app, Action::Duration, 0);
+  CHECK(hasText(app.view(0), "00:30"));
+  tapAction(app, Action::PreviousValue, 0);
+  tapAction(app, Action::Save, 0);
+  CHECK(app.screen() == Screen::EditDuration && hasText(app.view(0), "1秒以上"));
+  tapAction(app, Action::NextValue, 0);
+  tapAction(app, Action::Second, 0);
+  tapAction(app, Action::NextValue, 0);
+  tapAction(app, Action::Save, 0);
+  CHECK(hasText(app.view(500000), "01:01"));
+  tapAction(app, Action::Duration, 500000);
+  tapAction(app, Action::NextValue, 500000);
+  tapAction(app, Action::Back, 500000);
+  app.update(600000, finish); // Physical A starts while the RTC is unset.
+  CHECK(app.screen() == Screen::Running && app.tour().remainingMs(600000) == 61000);
+  CHECK(app.tour().segmentBudgetMs() == 20000 && app.view(600000).remainingPercent == 100);
+  CHECK(hasText(app.view(600000), "持ち時間 01:01") && !hasText(app.view(600000), "2000/"));
+  app.update(612000, question);
+  app.update(620000, next);
+  CHECK(app.tour().segmentBudgetMs() == 41000);
+  app.update(661000);
+  CHECK(app.motor(661000) > 0 && app.view(661000).remainingPercent == 0);
+  CHECK(hasText(app.view(663000), "終了超過"));
+  app.update(663000, finish);
+  CHECK(hasText(app.view(663000), "01:03") && hasText(app.view(663000), "予定より遅い 00:02"));
+  App reboot(course, rtc, store, editor); reboot.begin();
+  tapAction(reboot, Action::Records, 0);
+  CHECK(hasText(reboot.view(0), "持ち時間  01:01") && !hasText(reboot.view(0), "2000/"));
+  tapAction(reboot, Action::NextPage, 0);
+  CHECK(hasText(reboot.view(0), "1.  開始から 00:12"));
+  tapAction(app, Action::Back, 664000);
+  LocalSeconds verified;
+  CHECK(app.syncClock(timeAt(18,0), verified));
+  tapAction(app, Action::Start, 700000);
+  CHECK(app.tour().remainingMs(700000) == 61000);
+  app.update(701000, finish);
+  tapAction(app, Action::Back, 701000);
+  tapAction(app, Action::Deadline, 701000);
+  tapAction(app, Action::Save, 701000);
+  CHECK(app.deadlineConfirmed() && hasText(app.view(701000), "18:15"));
+  tapAction(app, Action::Duration, 701000);
+  tapAction(app, Action::Back, 701000);
+  CHECK(app.deadlineConfirmed());
 }
 void wifiEditedTour() {
   FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc; FakeEditor editor;
@@ -796,6 +863,11 @@ void uiSnapshots() {
   snapshot("questions",app.view(970003));
   CHECK(hasText(app.view(970003),"質問 1件"));
   tapAction(app,Action::Back,970004); CHECK(app.screen()==Screen::Standby);
+  rtc.valid = false;
+  tapAction(app,Action::Duration,970010); snapshot("duration-editor",app.view(970010));
+  tapAction(app,Action::Save,970010); snapshot("duration-ready",app.view(970010));
+  tapAction(app,Action::Start,970020);
+  app.update(1876020,finish); snapshot("duration-review",app.view(1881020));
 }
 int main(int argc, char** argv) {
   // Run the firmware's USB command loop against a pseudo-terminal for CLI tests.
@@ -828,7 +900,7 @@ int main(int argc, char** argv) {
     {"長時間稼働・記録上限",longUptimeAndLimits},
     {"画面上の操作と開始条件",touchControls},{"下段のタップ・スワイプ・描画更新",footerTaps},
     {"USB自動時刻設定",usbClockSync},{"Wi-Fi設定の上限と不正入力",wifiSettingsValidation},
-    {"USBコース設定と終了日時の確定",usbCourseSettings},
+    {"USBコースと終了日時・持ち時間の設定",usbCourseSettings},{"発表の持ち時間と振り返り",presentationTiming},
     {"Wi-Fi設定から案内開始・再起動",wifiEditedTour},
     {"案内中の区間リング",currentSegmentRing},{"画面プレビュー出力",uiSnapshots}
   };
