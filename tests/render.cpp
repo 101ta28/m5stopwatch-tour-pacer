@@ -57,6 +57,8 @@ View readView(const std::string& path) {
     } else if (kind == "ring") {
       fields >> view.remainingPercent >> ink;
       view.ringInk = static_cast<Ink>(ink);
+    } else if (kind == "segments") {
+      fields >> view.segmentIndex >> view.segmentCount;
     } else {
       TextRow row;
       int bg;
@@ -101,6 +103,18 @@ void checkLabels(lgfx::LGFX_Sprite& canvas, const View& view) {
   }
 }
 
+void checkRingClearance(lgfx::LGFX_Sprite& canvas, View rings) {
+  if (rings.segmentCount < 2) return;
+  const auto* pixels = static_cast<const uint16_t*>(canvas.getBuffer());
+  const std::vector<uint16_t> screen(pixels, pixels + canvas.width() * canvas.height());
+  rings.rows.clear();
+  rings.boxes.clear();
+  drawWatchView(canvas, rings);
+  for (size_t i = 0; i < screen.size(); ++i)
+    if (pixels[i] && pixels[i] != screen[i])
+      throw std::runtime_error("Running screen obscures a ring");
+}
+
 int main(int argc, char** argv) {
   checkTouchCoordinates();
   lgfx::LGFX_Sprite canvas;
@@ -117,5 +131,6 @@ int main(int argc, char** argv) {
     canvas.readRectRGB(0,0,466,466,rgb.data());
     image.write(reinterpret_cast<const char*>(rgb.data()), rgb.size());
     if (!image) return 1;
+    checkRingClearance(canvas, view);
   }
 }

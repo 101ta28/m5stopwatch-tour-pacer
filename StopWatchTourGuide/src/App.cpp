@@ -323,23 +323,26 @@ View App::view(Millis now) {
     const int64_t availableMs = (r.deadline - r.started) * 1000;
     v.remainingPercent = static_cast<int>(100 * std::max<int64_t>(0, left) / availableMs);
     v.ringInk = left <= int64_t(settings_.warnings.overall) * 1000 ? Ink::Warning : Ink::Accent;
-    row(v, "終了 " + dateText(r.deadline), 62, 20, Ink::Muted, 270);
+    v.segmentIndex = tour_.segment();
+    v.segmentCount = r.segments.size();
+    row(v, "終了 " + dateText(r.deadline), 70, 20, Ink::Muted, 270);
     row(v, now < deadlineBannerUntil_ && left > -1000 ? "終了時刻" : left < 0 ? "終了超過" : "終了まで",
         108, 24, v.ringInk);
     row(v, duration(left > 0 ? left + 999 : left), 172, 76,
-        v.ringInk == Ink::Warning ? Ink::Warning : Ink::Normal, 374);
-    row(v, r.course.segments[tour_.segment()].name, 244, 32);
+        v.ringInk == Ink::Warning ? Ink::Warning : Ink::Normal);
+    row(v, r.course.segments[v.segmentIndex].name, 244, 32,
+        v.segmentCount > 1 ? Ink::Segment : Ink::Normal);
     row(v, std::string(segmentLeft < 0 ? "目安超過  " : "目安残り  ") +
         duration(segmentLeft > 0 ? segmentLeft + 999 : segmentLeft), 281, 24, Ink::Muted);
     size_t count = 0;
-    for (const auto& q : r.questions) if (q.segment == tour_.segment()) ++count;
-    row(v, showMessage ? message_ : "区間 " + countText(tour_.segment()+1) + " / " + countText(r.segments.size()) +
+    for (const auto& q : r.questions) if (q.segment == v.segmentIndex) ++count;
+    row(v, showMessage ? message_ : "区間 " + countText(v.segmentIndex+1) + " / " + countText(v.segmentCount) +
         "    質問 " + countText(count) + "件", 313, 20, Ink::Muted);
-    if (tour_.segment() + 1 < r.segments.size()) {
-      button(v, "A  次の区間", Action::NextSegment, 78, 337, 149, 54, Ink::Surface, 20);
-      button(v, "B  質問を記録", Action::Question, 239, 337, 149, 54, Ink::Surface, 20);
-    } else button(v, "B  質問を記録", Action::Question, 109, 339, 248, 54);
-    row(v, "Aを0.8秒長押しで終了", 409, 20, Ink::Muted, 244);
+    if (v.segmentIndex + 1 < v.segmentCount) {
+      button(v, "A  次の区間", Action::NextSegment, 85, 330, 142, 54, Ink::Surface, 20);
+      button(v, "B  質問を記録", Action::Question, 239, 330, 142, 54, Ink::Surface, 20);
+    } else button(v, "B  質問を記録", Action::Question, 109, 330, 248, 54);
+    row(v, "Aを0.8秒長押しで終了", 396, 20, Ink::Muted, 244);
     return v;
   }
   if (!haveReview_) return v;

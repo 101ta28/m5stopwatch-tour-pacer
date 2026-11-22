@@ -21,12 +21,29 @@ uint32_t color(Ink ink) {
     case Ink::Normal: return 0xf5f5f7;
     case Ink::Muted: return 0xb7bbc3;
     case Ink::Accent: return 0x68caff;
+    case Ink::Segment: return 0xa6d980;
     case Ink::Warning: return 0xffb04e;
     case Ink::Surface: return 0x24262b;
     case Ink::Primary: return 0x77ceff;
     case Ink::OnPrimary: return 0x061923;
     case Ink::Track: return 0x303238;
     default: return 0;
+  }
+}
+
+void drawSegmentRing(lgfx::LGFXBase& canvas, size_t index, size_t count) {
+  if (count < 2) return;
+  constexpr int radius = 207;
+  const float step = 360.0f / count;
+  const float start = -90.0f + index * step;
+  canvas.fillArc(233, 233, radius+1, radius-1, 0, 360, color(Ink::Track));
+  canvas.fillArc(233, 233, radius+2, radius-3, start, start+step, color(Ink::Segment));
+  // Cut gaps in a single track so that a 32-stop course still needs only two arcs.
+  for (size_t i = 0; i < count; ++i) {
+    const float angle = i * step * (3.14159265f / 180.0f);
+    const int x = 233 + std::lround(radius * std::sin(angle));
+    const int y = 233 - std::lround(radius * std::cos(angle));
+    canvas.fillCircle(x, y, 5, color(Ink::Black));
   }
 }
 
@@ -82,6 +99,7 @@ void drawWatchView(lgfx::LGFXBase& canvas, const View& view) {
     if (view.remainingPercent > 0)
       canvas.fillArc(233, 233, radius, radius-5, -90,
                      -90 + view.remainingPercent * 3.6f, color(view.ringInk));
+    drawSegmentRing(canvas, view.segmentIndex, view.segmentCount);
   }
   for (const auto& box : view.boxes)
     canvas.fillSmoothRoundRect(box.x, box.y, box.width, box.height, box.radius, color(box.ink));

@@ -622,8 +622,29 @@ void wifiEditedTour() {
 void snapshot(const std::string& name,const View& v) {
   std::ofstream out("build/"+name+".tsv");
   if (v.remainingPercent >= 0) out<<"ring\t"<<v.remainingPercent<<'\t'<<int(v.ringInk)<<'\n';
+  if (v.segmentCount) out<<"segments\t"<<v.segmentIndex<<'\t'<<v.segmentCount<<'\n';
   for (const auto& b:v.boxes) out<<"box\t"<<b.x<<'\t'<<b.y<<'\t'<<b.width<<'\t'<<b.height<<'\t'<<int(b.ink)<<'\t'<<b.radius<<'\n';
   for (const auto& r:v.rows) out<<"text\t"<<r.x<<'\t'<<r.y<<'\t'<<r.size<<'\t'<<r.width<<'\t'<<int(r.ink)<<'\t'<<int(r.background)<<'\t'<<r.text<<'\n';
+}
+void currentSegmentRing() {
+  for (const size_t count : {size_t{1}, kMaxSegments}) {
+    FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc; FakeEditor editor;
+    Course course{"案内", std::vector<Segment>(count, {"展示", 1})};
+    App app(course, rtc, store, editor); app.begin();
+    CHECK(app.view(0).segmentCount == 0);
+    confirmDeadline(app);
+    tapAction(app, Action::Start, 0);
+    for (size_t i = 0; i < count; ++i) {
+      const auto view = app.view(i);
+      CHECK(view.segmentCount == count && view.segmentIndex == i);
+      if (i + 1 < count) tapAction(app, Action::NextSegment, i + 1);
+    }
+    app.update(901000, question);
+    app.update(901001, next);
+    CHECK(app.view(901001).segmentIndex == count - 1);
+    app.update(901002, finish);
+    CHECK(app.view(901002).segmentCount == 0);
+  }
 }
 void uiSnapshots() {
   FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc;
@@ -667,7 +688,7 @@ int main() {
     {"画面上の操作と開始条件",touchControls},{"下段のタップ・スワイプ・描画更新",footerTaps},
     {"USB自動時刻設定",usbClockSync},{"Wi-Fi設定の上限と不正入力",wifiSettingsValidation},
     {"Wi-Fi設定から案内開始・再起動",wifiEditedTour},
-    {"画面プレビュー出力",uiSnapshots}
+    {"案内中の区間リング",currentSegmentRing},{"画面プレビュー出力",uiSnapshots}
   };
   size_t passed=0;
   for (const auto& t:tests) {

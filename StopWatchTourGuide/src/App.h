@@ -9,7 +9,7 @@ class Clock {
   virtual bool set(const DateTime&) = 0;
 };
 enum class Screen { Standby, Running, Review, EditDeadline, EditClock, CoursePlan, WifiEdit };
-enum class Ink { Normal, Muted, Accent, Warning, Surface, Primary, OnPrimary, Track, Black };
+enum class Ink { Normal, Muted, Accent, Warning, Surface, Primary, OnPrimary, Track, Black, Segment };
 enum class Action { None, Clock, Deadline, Start, Course, Records, Back, Save, Retry,
                     PreviousValue, NextValue, Year, Month, Day, Hour, Minute,
                     NextSegment, Question, NextPage, WifiEdit };
@@ -25,6 +25,8 @@ struct View {
   std::vector<Box> boxes;
   int remainingPercent = -1;
   Ink ringInk = Ink::Accent;
+  size_t segmentIndex = 0;
+  size_t segmentCount = 0;
 };
 // Coordinates are for the StopWatch's 466 x 466 round panel.
 class App {
