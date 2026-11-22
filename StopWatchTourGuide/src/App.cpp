@@ -326,15 +326,16 @@ View App::view(Millis now) {
     v.segmentIndex = tour_.segment();
     v.segmentCount = r.segments.size();
     const auto& segment = r.course.segments[v.segmentIndex];
-    const int64_t segmentDurationMs = int64_t(segment.seconds) * 1000;
-    v.segmentRemainingFraction = static_cast<float>(std::max<int64_t>(0, segmentLeft)) / segmentDurationMs;
+    const auto budget = tour_.segmentBudgetMs();
+    v.segmentRemainingFraction = segmentLeft > 0 && budget > 0
+        ? static_cast<float>(segmentLeft) / budget : 0.0f;
     row(v, "終了 " + dateText(r.deadline), 70, 20, Ink::Muted, 270);
     row(v, now < deadlineBannerUntil_ && left > -1000 ? "終了時刻" : left < 0 ? "終了超過" : "終了まで",
         108, 24, v.ringInk);
     row(v, duration(left > 0 ? left + 999 : left), 172, 76,
         v.ringInk == Ink::Warning ? Ink::Warning : Ink::Normal);
     row(v, segment.name, 244, 32, v.segmentCount > 1 ? Ink::Segment : Ink::Normal);
-    row(v, std::string(segmentLeft < 0 ? "目安超過  " : "目安残り  ") +
+    row(v, std::string(segmentLeft < 0 ? "目安超過  " : "今回の目安  ") +
         duration(segmentLeft > 0 ? segmentLeft + 999 : segmentLeft), 281, 24, Ink::Muted);
     size_t count = 0;
     for (const auto& q : r.questions) if (q.segment == v.segmentIndex) ++count;

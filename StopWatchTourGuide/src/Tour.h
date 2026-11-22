@@ -46,12 +46,15 @@ class Tour {
   size_t segment() const { return segment_; }
   Millis elapsed(Millis now) const;
   int64_t remainingMs(Millis now) const;
+  int64_t segmentBudgetMs() const { return segmentBudgetMs_; }
   int64_t segmentRemainingMs(Millis now) const;
  private:
+  void enterSegment(size_t index, Millis now);
   Record record_;
   WarningTimes warnings_;
   Millis origin_ = 0;
   size_t segment_ = 0;
+  int64_t segmentBudgetMs_ = 0;
   bool running_ = false, overallWarned_ = false, deadlineNotified_ = false;
   bool segmentWarned_ = false;
 };

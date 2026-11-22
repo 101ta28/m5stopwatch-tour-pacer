@@ -1,5 +1,6 @@
 #include "Tour.h"
 #include <algorithm>
+#include <cmath>
 #include <cstdio>
 #include <limits>
 
@@ -53,12 +54,11 @@ StartError Tour::start(const Course& c, LocalSeconds now, bool clockSet,
   record_.deadline = deadline;
   record_.segments.resize(c.segments.size());
   record_.questions.reserve(kMaxQuestions);
-  record_.segments[0].visited = true;
   warnings_ = warnings;
   origin_ = monotonic;
-  segment_ = 0;
   running_ = true;
-  overallWarned_ = deadlineNotified_ = segmentWarned_ = false;
+  overallWarned_ = deadlineNotified_ = false;
+  enterSegment(0, monotonic);
   return StartError::None;
 }
 Millis Tour::elapsed(Millis now) const {
@@ -67,10 +67,27 @@ Millis Tour::elapsed(Millis now) const {
 int64_t Tour::remainingMs(Millis now) const {
   return (record_.deadline - record_.started) * 1000 - static_cast<int64_t>(elapsed(now));
 }
+void Tour::enterSegment(size_t index, Millis now) {
+  segment_ = index;
+  const auto start = elapsed(now);
+  record_.segments[index] = {true, start, start};
+  segmentWarned_ = false;
+
+  const int64_t availableMs = std::max<int64_t>(0, remainingMs(now));
+  const auto& segments = record_.course.segments;
+  segmentBudgetMs_ = availableMs;
+  if (availableMs == 0 || index + 1 == segments.size()) return;
+
+  int64_t remainingWeight = 0;
+  for (size_t i = index; i < segments.size(); ++i) remainingWeight += segments[i].seconds;
+  // Round the assigned budget once so the displayed seconds and warning agree.
+  const double shareSeconds = (availableMs / 1000.0) * segments[index].seconds / remainingWeight;
+  const int64_t seconds = std::max<int64_t>(1, std::llround(shareSeconds));
+  segmentBudgetMs_ = std::min(availableMs, seconds * 1000);
+}
 int64_t Tour::segmentRemainingMs(Millis now) const {
   if (record_.segments.empty()) return 0;
-  return static_cast<int64_t>(record_.course.segments[segment_].seconds) * 1000 -
-         static_cast<int64_t>(elapsed(now) - record_.segments[segment_].start);
+  return segmentBudgetMs_ - static_cast<int64_t>(elapsed(now) - record_.segments[segment_].start);
 }
 Outcome Tour::update(Millis now, Input input) {
   Outcome out;
@@ -92,8 +109,7 @@ Outcome Tour::update(Millis now, Input input) {
   if (input.aShort) {
     if (segment_ + 1 < record_.segments.size()) {
       record_.segments[segment_].end = e;
-      record_.segments[++segment_] = {true, e, e};
-      segmentWarned_ = false;
+      enterSegment(segment_ + 1, now);
       out.segmentChanged = true;
       out.notice = Notice::Confirm;
     } else out.lastSegmentHint = true;
@@ -101,8 +117,9 @@ Outcome Tour::update(Millis now, Input input) {
   const auto left = remainingMs(now);
   const auto overallWarningMs = int64_t(warnings_.overall) * 1000;
   // Consume all crossed thresholds, even if their notification loses priority.
-  if (!segmentWarned_ && record_.course.segments[segment_].seconds > warnings_.segment &&
-      segmentRemainingMs(now) <= int64_t(warnings_.segment) * 1000) {
+  const int64_t segmentWarningMs = int64_t(warnings_.segment) * 1000;
+  if (!segmentWarned_ && segmentBudgetMs_ > segmentWarningMs &&
+      segmentRemainingMs(now) <= segmentWarningMs) {
     segmentWarned_ = true;
     if (!overallWarned_ && left > overallWarningMs) out.notice = Notice::SegmentWarning;
   }

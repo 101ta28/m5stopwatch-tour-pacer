@@ -144,20 +144,49 @@ void lateStart() {
   auto t=started(14,2);
   CHECK(t.remainingMs(0)==780000);
   CHECK(t.segment()==0);
-  CHECK(t.update(659999).notice==Notice::SegmentWarning);
+  CHECK(t.segmentBudgetMs()==104000);
+  CHECK(t.update(73999).notice==Notice::None);
+  CHECK(t.update(74000).notice==Notice::SegmentWarning);
   CHECK(t.update(660000).notice==Notice::OverallWarning);
   CHECK(t.update(660001).notice==Notice::None);
   CHECK(t.update(780000).notice==Notice::Deadline);
   CHECK(t.update(900000).notice==Notice::None);
 }
-void independentSegments() {
-  auto t=started();
-  t.update(150000,next);
-  CHECK(t.remainingMs(150000)==750000);
-  CHECK(t.segmentRemainingMs(150000)==420000);
-  CHECK(t.update(539999).notice==Notice::None);
-  CHECK(t.update(540000).notice==Notice::SegmentWarning);
-  CHECK(t.update(540001).notice==Notice::None);
+void proportionalSegments() {
+  struct Example { Millis entry; int64_t budget; const char* label; };
+  for (const Example ex : {Example{60000,452000,"07:32"}, {120000,420000,"07:00"},
+                           {150000,404000,"06:44"}, {180000,388000,"06:28"}}) {
+    FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc; FakeEditor editor;
+    App app(configuredCourse(), rtc, store, editor); app.begin(); confirmDeadline(app);
+    tapAction(app, Action::Start, 0);
+    tapAction(app, Action::NextSegment, ex.entry);
+    CHECK(app.tour().remainingMs(ex.entry) == int64_t(900000 - ex.entry));
+    CHECK(app.tour().segmentRemainingMs(ex.entry) == ex.budget);
+    CHECK(hasText(app.view(ex.entry), std::string("今回の目安  ") + ex.label));
+    CHECK(app.view(ex.entry).segmentRemainingFraction == 1.0f);
+    CHECK(app.view(ex.entry + ex.budget / 2).segmentRemainingFraction == 0.5f);
+    const Millis warning = ex.entry + ex.budget - 30000;
+    app.update(warning - 1); CHECK(app.motor(warning - 1) == 0);
+    app.update(warning); CHECK(app.motor(warning) == 220);
+    CHECK(app.view(ex.entry + ex.budget).segmentRemainingFraction == 0.0f);
+    CHECK(app.tour().record().course.segments[1].seconds == 420);
+  }
+}
+void budgetAtDeadline() {
+  auto t = started();
+  t.update(899875, next);
+  CHECK(t.segmentBudgetMs() == 125);
+  t.update(900000, next);
+  CHECK(t.segmentBudgetMs() == 0 && t.segmentRemainingMs(900000) == 0);
+  t.update(901000, next);
+  CHECK(t.segmentBudgetMs() == 0 && t.segmentRemainingMs(901500) == -500);
+
+  Course large{"長期", std::vector<Segment>(kMaxSegments, {"展示", INT32_MAX})};
+  const auto start = toSeconds({2000,1,1,0,0,0});
+  const auto end = toSeconds({2099,12,31,23,59,59});
+  Tour longTour;
+  CHECK(longTour.start(large,start,true,end,0)==StartError::None);
+  CHECK(longTour.segmentBudgetMs() == ((end-start+16)/32)*1000);
 }
 void recoverTime() {
   auto t=started();
@@ -172,7 +201,7 @@ void recoverTime() {
 }
 void simultaneousWarnings() {
   auto t=started();
-  t.update(120000,next); t.update(570000,next);
+  t.update(120000,next); t.update(630000,next);
   CHECK(t.update(780000).notice==Notice::OverallWarning);
   CHECK(t.update(780001).notice==Notice::None);
   CHECK(t.update(810000).notice==Notice::None);
@@ -318,11 +347,12 @@ void delayAndPriority() {
 }
 void shortAndLastSegments() {
   Tour t;
-  CHECK(t.start({"short",{{"short",30},{"tiny",1}}},timeAt(14,0),true,timeAt(14,15),0)==StartError::None);
+  CHECK(t.start({"short",{{"short",30},{"tiny",1}}},timeAt(14,0),true,timeAt(14,0,31),0,{1,30})==StartError::None);
   CHECK(t.update(20000).notice==Notice::None);
   t.update(20001,next);
-  CHECK(t.segmentRemainingMs(20001)==1000);
-  CHECK(t.update(30000).notice==Notice::None);
+  CHECK(t.segmentRemainingMs(20001)==10999);
+  CHECK(t.update(29999).notice==Notice::None);
+  CHECK(t.update(30000).notice==Notice::OverallWarning);
   CHECK(t.update(31000,next).lastSegmentHint);
   CHECK(t.running() && t.segment()==1);
 }
@@ -601,7 +631,7 @@ void wifiEditedTour() {
   tapAction(app,Action::WifiEdit,3);
   CHECK(editor.opened && hasText(app.view(3),"http://192.168.4.1"));
   app.update(4,finish); CHECK(app.screen() == Screen::WifiEdit && !app.tour().running());
-  CHECK(parseSettings("特別案内\n50\t5\n20\t見学\n1\t解散", editor.saved));
+  CHECK(parseSettings("特別案内\n30\t5\n20\t見学\n1\t解散", editor.saved));
   app.update(5,question); // B closes Wi-Fi and returns to the plan.
   CHECK(!editor.opened && hasText(app.view(5),"見学") && hasText(app.view(5),"00:20"));
   tapAction(app,Action::Back,6);
@@ -609,11 +639,11 @@ void wifiEditedTour() {
   CHECK(hasText(app.view(7),"施設案内"));
   tapAction(app,Action::Back,8);
   tapAction(app,Action::Start,10);
-  CHECK(app.tour().record().course.name == "特別案内" && app.tour().segmentRemainingMs(10) == 20000);
-  app.update(15009); CHECK(app.motor(15009) == 0);
-  app.update(15010); CHECK(app.motor(15010) == 220);
-  CHECK(app.view(800010).ringInk == Ink::Accent);
-  app.update(850010); CHECK(app.motor(850010) == 220 && app.view(850010).ringInk == Ink::Warning);
+  CHECK(app.tour().record().course.name == "特別案内" && app.tour().segmentRemainingMs(10) == 857000);
+  app.update(852009); CHECK(app.motor(852009) == 0);
+  app.update(852010); CHECK(app.motor(852010) == 220);
+  CHECK(app.view(860010).ringInk == Ink::Accent);
+  app.update(870010); CHECK(app.motor(870010) == 220 && app.view(870010).ringInk == Ink::Warning);
   App reboot(configuredCourse(), rtc, store, editor); reboot.begin();
   CHECK(hasText(reboot.view(0),"特別案内"));
   tapAction(reboot,Action::Course,0);
@@ -633,17 +663,17 @@ void currentSegmentRing() {
     App app(course, rtc, store, editor); app.begin();
     CHECK(app.view(0).segmentCount == 0);
     confirmDeadline(app);
+    rtc.now = timeAt(14,15) - static_cast<int64_t>(count); // One second per segment.
     tapAction(app, Action::Start, 0);
     for (size_t i = 0; i < count; ++i) {
-      const Millis start = i * 2000;
+      const Millis start = i * 1000;
       const auto view = app.view(start);
       CHECK(view.segmentCount == count && view.segmentIndex == i);
       CHECK(view.segmentRemainingFraction == 1.0f);
       CHECK(app.view(start + 125).segmentRemainingFraction == 0.875f);
       CHECK(app.view(start + 500).segmentRemainingFraction == 0.5f);
       CHECK(app.view(start + 1000).segmentRemainingFraction == 0.0f);
-      CHECK(app.view(start + 1500).segmentRemainingFraction == 0.0f);
-      if (i + 1 < count) tapAction(app, Action::NextSegment, start + 2000);
+      if (i + 1 < count) tapAction(app, Action::NextSegment, start + 1000);
     }
     app.update(901000, question);
     app.update(901001, next);
@@ -667,7 +697,7 @@ void uiSnapshots() {
   tapAction(app,Action::Save,0); snapshot("ready",app.view(0));
   tapAction(app,Action::Start,0); CHECK(app.screen()==Screen::Running);
   tapAction(app,Action::NextSegment,120000); tapAction(app,Action::NextSegment,600000);
-  const auto running = app.view(720000);
+  const auto running = app.view(700000);
   CHECK(running.segmentRemainingFraction == 0.5f);
   snapshot("running",running);
   app.update(961000); snapshot("overtime",app.view(961000));
@@ -680,7 +710,8 @@ void uiSnapshots() {
 }
 int main() {
   const std::pair<const char*,std::function<void()>> tests[]={
-    {"遅れて開始",lateStart},{"区間の独立性",independentSegments},{"時間を取り戻す",recoverTime},
+    {"遅れて開始",lateStart},{"区間の比例配分",proportionalSegments},{"締切前後と配分の上限",budgetAtDeadline},
+    {"時間を取り戻す",recoverTime},
     {"区間予告と全体予告が同時",simultaneousWarnings},{"終了間際の開始",imminentStart},
     {"締切超過",overtime},{"質問と入力",questionsDuringVibration},{"途中で終了",earlyFinish},
     {"日またぎと不正設定",midnightAndInvalidSettings},{"保存と復帰",persistenceAndReboot},
