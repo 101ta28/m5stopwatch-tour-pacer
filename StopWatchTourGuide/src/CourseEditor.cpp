@@ -28,6 +28,14 @@ bool positiveSeconds(std::string_view text, int32_t& seconds) {
   return result.ec == std::errc{} && result.ptr == text.data() + text.size() && seconds > 0;
 }
 }  // namespace
+CourseSave CourseEditor::save(std::string_view text, GuideSettings& settings) {
+  GuideSettings candidate;
+  if (!parseSettings(text, candidate)) return CourseSave::Invalid;
+  if (!writeCourse(text)) return CourseSave::Failed;
+  settings = std::move(candidate);
+  return CourseSave::Saved;
+}
+
 std::string settingsText(const GuideSettings& settings) {
   std::string text = settings.course.name + "\n" + std::to_string(settings.warnings.overall) +
                      "\t" + std::to_string(settings.warnings.segment);

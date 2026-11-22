@@ -1,5 +1,6 @@
 #pragma once
 #include "CourseEditor.h"
+#include <optional>
 
 namespace tour {
 class Clock {
@@ -35,6 +36,7 @@ class App {
   App(Course course, Clock& clock, RecordStore& store, CourseEditor& editor);
   void begin();
   bool syncClock(LocalSeconds requested, LocalSeconds& verified);
+  CourseSave saveCourse(std::string_view text, std::optional<LocalSeconds> deadline);
   void update(Millis now, Input input = {});
   void tap(int x, int y, Millis now);
   void releaseTouch(int startX, int startY, int endX, int endY, Millis now);

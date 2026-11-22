@@ -1,0 +1,11 @@
+{
+  "name": "施設案内",
+  "deadline": "2026-12-01T14:15",
+  "warnings": { "overall": 120, "segment": 30 },
+  "segments": [
+    { "name": "導入", "seconds": 120 },
+    { "name": "展示説明", "seconds": 420 },
+    { "name": "体験", "seconds": 240 },
+    { "name": "移動", "seconds": 120 }
+  ]
+}

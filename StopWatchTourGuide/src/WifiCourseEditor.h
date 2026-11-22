@@ -9,6 +9,7 @@ class WifiCourseEditor final : public CourseEditor {
   bool open(const GuideSettings&, WifiAccess&) override;
   void close(GuideSettings&) override;
  private:
+  bool writeCourse(std::string_view text) override;
   httpd_handle_t server_ = nullptr;
   // Owned by the HTTP server task from startup until httpd_stop() returns.
   GuideSettings saved_;

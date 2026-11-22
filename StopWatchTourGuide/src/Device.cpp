@@ -9,7 +9,7 @@
 #include <algorithm>
 #include "../CourseConfig.h"
 #include "App.h"
-#include "ClockSync.h"
+#include "UsbCommands.h"
 #include "WatchUi.h"
 
 namespace {
@@ -72,7 +72,7 @@ RecordStore records(blobs);
 RtcClock rtc;
 WifiCourseEditor editor;
 App app(configuredCourse(), rtc, records, editor);
-ClockSync clockSync;
+UsbCommands usbCommands;
 Button buttonA;
 Button buttonB(false);
 M5Canvas canvas(&M5.Display);
@@ -297,7 +297,7 @@ void deviceLoop() {
   for (int i = 0; i < 64 && Serial.available(); ++i) {
     const int byte = Serial.read();
     if (byte < 0) break;
-    const auto reply = clockSync.receive(static_cast<char>(byte), app);
+    const auto reply = usbCommands.receive(static_cast<char>(byte), app);
     if (!reply.empty()) Serial.println(reply.c_str());
   }
   M5.update();

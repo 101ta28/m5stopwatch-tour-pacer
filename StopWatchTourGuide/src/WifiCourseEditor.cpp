@@ -46,6 +46,10 @@ LoadResult WifiCourseEditor::load(GuideSettings& settings) {
   return LoadResult::Found;
 }
 
+bool WifiCourseEditor::writeCourse(std::string_view text) {
+  return writeNvsBlob(kCourseKey, text.data(), text.size());
+}
+
 bool WifiCourseEditor::open(const GuideSettings& settings, WifiAccess& access) {
   uint8_t mac[6];
   if (esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP) != ESP_OK) return false;
@@ -98,12 +102,11 @@ esp_err_t WifiCourseEditor::handle(httpd_req_t* req) {
     if (count <= 0 || millis() - started > 5000) return ESP_FAIL;
     received += count;
   }
-  GuideSettings candidate;
-  if (!parseSettings(body, candidate))
+  const auto saved = editor.save(body, editor.saved_);
+  if (saved == CourseSave::Invalid)
     return reply(req, "400 Bad Request", kText, "名前、区間数、目安と予告の秒数を確認してください。");
-  if (!writeNvsBlob(kCourseKey, body.data(), body.size()))
+  if (saved == CourseSave::Failed)
     return reply(req, "500 Internal Server Error", kText, "本体に保存できませんでした。もう一度保存してください。");
-  editor.saved_ = std::move(candidate);
   return reply(req, "200 OK", kText, "本体に保存しました。StopWatchの「Wi-Fiを終了」を押してください。");
 }
 

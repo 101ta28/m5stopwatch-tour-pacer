@@ -1,5 +1,5 @@
 #include "App.h"
-#include "ClockSync.h"
+#include "UsbCommands.h"
 #include "../StopWatchTourGuide/CourseConfig.h"
 #include <algorithm>
 #include <array>
@@ -48,6 +48,7 @@ struct FakeEditor : CourseEditor {
     return true;
   }
   void close(GuideSettings& settings) override { load(settings); opened = false; }
+  bool writeCourse(std::string_view text) override { return available && parseSettings(text, saved); }
 };
 struct FakeClock : Clock {
   LocalSeconds now=timeAt(14,0);
@@ -81,6 +82,11 @@ void confirmDeadline(App& app,Millis now=0) {
   CHECK(app.screen()==Screen::Standby);
   CHECK(app.deadlineConfirmed());
 }
+std::string sendUsb(UsbCommands& usb, App& app, std::string_view bytes) {
+  std::string response;
+  for (char byte : bytes) response += usb.receive(byte, app);
+  return response;
+}
 void usbClockSync() {
   FakeBlobs blobs;
   RecordStore store(blobs);
@@ -95,11 +101,9 @@ void usbClockSync() {
   FakeEditor editor;
   App app(configuredCourse(), rtc, store, editor);
   app.begin();
-  ClockSync usb;
+  UsbCommands usb;
   auto send = [&](const std::string& bytes) {
-    std::string response;
-    for (const char c : bytes) response += usb.receive(c, app);
-    return response;
+    return sendUsb(usb, app, bytes);
   };
   CHECK(send("TOUR TI").empty());
   CHECK(send("ME?\r\n") == "TOUR TIME READY");
@@ -653,6 +657,56 @@ void wifiSettingsValidation() {
     CHECK(settingsText(decoded) == good);
   }
 }
+void usbCourseSettings() {
+  FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc; FakeEditor editor;
+  App app(configuredCourse(), rtc, store, editor); app.begin();
+  UsbCommands usb;
+  auto command = [&](const std::string& value) {
+    return sendUsb(usb, app, "TOUR COURSE " + value + "\n");
+  };
+  const std::string body = "夜の案内\n60\t10\n300\t見学";
+  const std::string length = std::to_string(body.size());
+  auto stage = [&] {
+    CHECK(command("BEGIN") == "TOUR COURSE READY");
+    for (const auto* line : {"夜の案内", "60\t10", "300\t見学"})
+      CHECK(command(std::string("LINE ") + line) == "TOUR COURSE NEXT");
+  };
+  const auto deadline = toSeconds({2026,11,21,0,15,0});
+  const std::string save = "SAVE " + std::to_string(deadline) + " " + length;
+  stage();
+  CHECK(command("SAVE - 1") == "TOUR COURSE INVALID");
+  CHECK(command(save) == "TOUR COURSE INVALID");
+  stage();
+  CHECK(command("LINE " + std::string(150, 'x')) == "TOUR COURSE INVALID");
+  CHECK(command(save) == "TOUR COURSE INVALID");
+  stage();
+  tapAction(app, Action::Course, 0);
+  tapAction(app, Action::WifiEdit, 0);
+  CHECK(command(save) == "TOUR COURSE BUSY");
+  tapAction(app, Action::Back, 0);
+  tapAction(app, Action::Back, 0);
+  CHECK(command(save) == "TOUR COURSE INVALID");
+  for (const auto invalid : {rtc.now - 60, rtc.now, deadline + 1, toSeconds({2100,1,1,0,0,0})}) {
+    stage();
+    CHECK(command("SAVE " + std::to_string(invalid) + " " + length) == "TOUR COURSE DEADLINE");
+  }
+  rtc.valid = false;
+  stage(); CHECK(command(save) == "TOUR COURSE CLOCK");
+  rtc.valid = true;
+  editor.available = false;
+  stage(); CHECK(command(save) == "TOUR COURSE FAILED");
+  CHECK(!app.deadlineConfirmed() && hasText(app.view(0), "施設案内") && editor.saved.course.name.empty());
+  editor.available = true;
+  stage(); CHECK(command(save) == "TOUR COURSE OK");
+  CHECK(settingsText(editor.saved) == body && app.deadlineConfirmed());
+  CHECK(hasText(app.view(0), "2026/11/21") && hasText(app.view(0), "00:15"));
+  stage(); CHECK(command("SAVE - " + length) == "TOUR COURSE OK");
+  tapAction(app, Action::Start, 0);
+  CHECK(app.tour().record().deadline == deadline && app.tour().record().course.name == "夜の案内");
+  CHECK(command("BEGIN") == "TOUR COURSE BUSY");
+  App reboot(configuredCourse(), rtc, store, editor); reboot.begin();
+  CHECK(hasText(reboot.view(0), "夜の案内") && !reboot.deadlineConfirmed());
+}
 void wifiEditedTour() {
   FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc; FakeEditor editor;
   CHECK(store.save(completed()));
@@ -743,7 +797,19 @@ void uiSnapshots() {
   CHECK(hasText(app.view(970003),"質問 1件"));
   tapAction(app,Action::Back,970004); CHECK(app.screen()==Screen::Standby);
 }
-int main() {
+int main(int argc, char** argv) {
+  // Run the firmware's USB command loop against a pseudo-terminal for CLI tests.
+  if (argc == 2 && std::string_view(argv[1]) == "--usb") {
+    FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc; FakeEditor editor;
+    App app(configuredCourse(), rtc, store, editor); app.begin();
+    UsbCommands usb;
+    char byte;
+    while (std::cin.get(byte)) {
+      const auto reply = usb.receive(byte, app);
+      if (!reply.empty()) std::cout << reply << std::endl;
+    }
+    return 0;
+  }
   const std::pair<const char*,std::function<void()>> tests[]={
     {"遅れて開始",lateStart},{"区間の比例配分",proportionalSegments},{"締切前後と配分の上限",budgetAtDeadline},
     {"時間を取り戻す",recoverTime},
@@ -762,6 +828,7 @@ int main() {
     {"長時間稼働・記録上限",longUptimeAndLimits},
     {"画面上の操作と開始条件",touchControls},{"下段のタップ・スワイプ・描画更新",footerTaps},
     {"USB自動時刻設定",usbClockSync},{"Wi-Fi設定の上限と不正入力",wifiSettingsValidation},
+    {"USBコース設定と終了日時の確定",usbCourseSettings},
     {"Wi-Fi設定から案内開始・再起動",wifiEditedTour},
     {"案内中の区間リング",currentSegmentRing},{"画面プレビュー出力",uiSnapshots}
   };

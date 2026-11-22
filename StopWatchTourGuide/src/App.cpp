@@ -44,6 +44,22 @@ void App::begin() {
   LocalSeconds now = 0;
   if (clock_.read(now)) deadline_ = suggestedDeadline(now);
 }
+CourseSave App::saveCourse(std::string_view text, std::optional<LocalSeconds> deadline) {
+  if (screen_ != Screen::Standby) return CourseSave::Failed;
+  if (deadline) {
+    LocalSeconds now;
+    if (!clock_.read(now)) return CourseSave::ClockUnset;
+    if (*deadline <= now || *deadline >= toSeconds({2100,1,1,0,0,0}) || *deadline % 60 != 0)
+      return CourseSave::InvalidDeadline;
+  }
+  const auto result = editor_.save(text, settings_);
+  if (result == CourseSave::Saved && deadline) {
+    deadline_ = *deadline;
+    deadlineConfirmed_ = true;
+    message_.clear();
+  }
+  return result;
+}
 bool App::syncClock(LocalSeconds requested, LocalSeconds& verified) {
   if (screen_ != Screen::Standby || requested < 0 ||
       requested >= toSeconds({2100,1,1,0,0,0})) return false;

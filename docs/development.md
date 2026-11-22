@@ -4,7 +4,7 @@
 
 ## PCで計時と操作をテストする
 
-BashとC++17コンパイラを使います。テストはAddressSanitizerとUndefinedBehaviorSanitizerを有効にして実行します。
+Linux、Bash、C++17コンパイラ、Python 3を使います。C++テストはAddressSanitizerとUndefinedBehaviorSanitizerを有効にして実行します。USBのテストでは、仮想シリアルポートを通して時刻同期とJSON設定のスクリプトを本体のコマンド処理に接続します。
 
 ```sh
 ./scripts/test.sh
