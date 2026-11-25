@@ -22,7 +22,8 @@ def require(condition, message):
 
 def main():
     expected = {}
-    source = ROOT / "StopWatchTourGuide" / "partitions.csv"
+    sketch = ROOT / "StopWatchTourGuide"
+    source = sketch / "partitions.csv"
     for row in csv.reader(source.read_text(encoding="utf-8").splitlines()):
         if not row or row[0].lstrip().startswith("#"):
             continue
@@ -62,8 +63,16 @@ def main():
         (actual["app0"][0], FIRMWARE / f"{STEM}.bin"),
     ]
     options = json.loads((BUILD / "build.options.json").read_bytes())
-    platform = Path(options["hardwareFolders"].split(",")[0])
-    files.append((actual["otadata"][0], platform / "tools" / "partitions" / "boot_app0.bin"))
+    # M5Stack's savehex hook exports the OTA image under vendor.arch.board.
+    board_dir = ".".join(options["fqbn"].split(":")[:3])
+    ota = sketch / "build" / board_dir / "boot_app0.bin"
+    if not ota.is_file():
+        # Builds without the export can still record the resolved platform here.
+        platform = Path(options["hardwareFolders"].split(",")[0])
+        ota = platform / "tools" / "partitions" / "boot_app0.bin"
+    require(ota.is_file(), "boot_app0.bin not found in the board export or platform")
+    require(ota.stat().st_size == actual["otadata"][1], "wrong size of boot_app0.bin")
+    files.append((actual["otadata"][0], ota))
     for offset, path in files:
         data = path.read_bytes()
         require(image[offset:offset + len(data)] == data, f"wrong placement of {path.name}")
