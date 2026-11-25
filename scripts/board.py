@@ -58,7 +58,7 @@ def build(cli):
 def upload(cli, port, sync_port):
     options = BUILD / "arduino" / "build.options.json"
     if not (FIRMWARE / f"{SKETCH}.ino.bin").is_file() or not options.is_file():
-        sys.exit("先に board.py build でファームウェアを生成してください。")
+        sys.exit("先に uv run scripts/board.py build でファームウェアを生成してください。")
     subprocess.run([sys.executable, "scripts/verify-firmware.py"], check=True)
     if not sync_port:
         sync_port = port
@@ -71,7 +71,7 @@ def upload(cli, port, sync_port):
             "--input-dir", FIRMWARE, SKETCH], "board-upload.log")
     print("書き込みが完了しました。PCの現地日時を端末に設定します。", flush=True)
     if subprocess.run([sys.executable, "scripts/sync-clock.py", sync_port]).returncode:
-        sys.exit("書き込みは完了しています。通常モードのポートを確認し、sync-clock.py <PORT> で再同期してください。")
+        sys.exit("書き込みは完了しています。通常モードのポートを確認し、uv run scripts/sync-clock.py <PORT> で再同期してください。")
 
 
 def main():

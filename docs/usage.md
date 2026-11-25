@@ -16,9 +16,9 @@
 
    | OS | コマンド例 |
    |---|---|
-   | Windows | `py -3 scripts/sync-course.py COM3 course.json` |
-   | macOS | `python3 scripts/sync-course.py /dev/cu.usbmodem101 course.json` |
-   | Linux | `python3 scripts/sync-course.py /dev/ttyACM0 course.json` |
+   | Windows | `uv run scripts/sync-course.py COM3 course.json` |
+   | macOS | `uv run scripts/sync-course.py /dev/cu.usbmodem101 course.json` |
+   | Linux | `uv run scripts/sync-course.py /dev/ttyACM0 course.json` |
 
 4. 設定完了の表示が出たら本体の待機画面で値を確認し、発表なら「計時を開始」、終了日時を指定した案内なら「案内を開始」をタップします。
 

@@ -20,42 +20,26 @@
 
 ## Arduino CLIを使う
 
-Windows、macOS、Linuxで、Python 3とArduino CLIを使って書き込めます。Arduino CLIをPATHに追加するか、環境変数 `ARDUINO_CLI` に実行ファイルのパスを指定してください。[Arduino CLIの導入手順](https://arduino.github.io/arduino-cli/1.6/installation/)
+Windows、macOS、Linuxで、uvとArduino CLIを使って書き込めます。Arduino CLIをPATHに追加するか、環境変数 `ARDUINO_CLI` に実行ファイルのパスを指定してください。[uvの導入手順](https://docs.astral.sh/uv/getting-started/installation/) · [Arduino CLIの導入手順](https://arduino.github.io/arduino-cli/1.6/installation/)
 
 次のコマンドはリポジトリのルートで実行します。ボードパッケージとライブラリは `.arduino/`、ビルドしたファームウェアは `build/firmware/` に入ります。`setup` は初回に実行し、ソースを変更したら `build` を再実行します。
 
-### Windows（PowerShell）
+### ボードの準備と書き込み
 
-Python 3の `py -3` と `arduino-cli` が使える状態で、次を実行します。pySerialは書き込み後の時刻同期、JSON設定、ログの取得に使います。
-
-```powershell
-py -3 -m pip install pyserial==3.5
-py -3 scripts/board.py setup
-py -3 scripts/board.py build
-```
-
-StopWatchをダウンロードモードでUSB接続し、`ports` に表示されたポート名で書き込みます。以下の `COM3` は例です。
-
-```powershell
-py -3 scripts/board.py ports
-py -3 scripts/board.py upload COM3
-```
-
-### macOS・Linux（ターミナル）
+WindowsのPowerShellでも、macOS・Linuxのターミナルでも、同じコマンドを使います。初回の `uv run` でPythonの仮想環境が作られ、USB通信用のpySerialが入ります。
 
 ```sh
-python3 scripts/board.py setup
-python3 scripts/board.py build
+uv run scripts/board.py setup
+uv run scripts/board.py build
 ```
 
-StopWatchをダウンロードモードでUSB接続して `python3 scripts/board.py ports` の一覧を確認し、以下のポート名を実際の値に置き換えてください。
+StopWatchをダウンロードモードでUSB接続して `uv run scripts/board.py ports` の一覧を確認し、以下のポート名を実際の値に置き換えてください。
 
-```sh
-# macOS
-python3 scripts/board.py upload /dev/cu.usbmodem101
-# Linux
-python3 scripts/board.py upload /dev/ttyACM0
-```
+| OS | 書き込みコマンドの例 |
+|---|---|
+| Windows | `uv run scripts/board.py upload COM3` |
+| macOS | `uv run scripts/board.py upload /dev/cu.usbmodem101` |
+| Linux | `uv run scripts/board.py upload /dev/ttyACM0` |
 
 ### 書き込み後の時刻同期
 
@@ -71,15 +55,15 @@ PCの時計に合わせるには、本体を通常モードの待機画面にし
 
 | OS | コマンド例 |
 |---|---|
-| Windows | `py -3 scripts/sync-clock.py COM3` |
-| macOS | `python3 scripts/sync-clock.py /dev/cu.usbmodem101` |
-| Linux | `python3 scripts/sync-clock.py /dev/ttyACM0` |
+| Windows | `uv run scripts/sync-clock.py COM3` |
+| macOS | `uv run scripts/sync-clock.py /dev/cu.usbmodem101` |
+| Linux | `uv run scripts/sync-clock.py /dev/ttyACM0` |
 
 電源を切った後も内蔵時計はバッテリーを使います。バッテリーが切れて時計が止まったときは、充電後に合わせ直してください。
 
 
 ## USBで起動ログを取る
 
-通常モードで `scripts/monitor-board.py` にポート名を渡すと、30秒間のログを `build/board-monitor.log` に保存します。Windowsでは `py -3 scripts/monitor-board.py COM3`、macOSでは `python3 scripts/monitor-board.py /dev/cu.usbmodem101` のように実行します。
+通常モードで `scripts/monitor-board.py` にポート名を渡すと、30秒間のログを `build/board-monitor.log` に保存します。Windowsでは `uv run scripts/monitor-board.py COM3`、macOSでは `uv run scripts/monitor-board.py /dev/cu.usbmodem101` のように実行します。
 
 [案内を始める](../README.md#案内を始める)

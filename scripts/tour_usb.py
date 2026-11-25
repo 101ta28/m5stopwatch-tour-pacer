@@ -20,7 +20,7 @@ def open_com_port(port, *, monitor=False):
     try:
         import serial
     except ImportError:
-        raise SystemExit("Windows のUSB接続には pySerial が必要です。py -3 -m pip install pyserial を実行してください。")
+        raise SystemExit("Windows のUSB接続には pySerial が必要です。リポジトリのルートから uv run でスクリプトを実行してください。")
     try:
         # Set the modem lines before opening so the application stays in normal mode.
         device = serial.Serial(port=None, baudrate=115200, write_timeout=1)

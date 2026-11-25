@@ -1,2 +1,3 @@
 #!/usr/bin/env bash
-exec python3 "$(dirname "$0")/board.py" setup "$@"
+script_dir=$(dirname "$0")
+exec uv run --project "$script_dir/.." "$script_dir/board.py" setup "$@"
