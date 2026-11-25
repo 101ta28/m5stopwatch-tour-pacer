@@ -48,6 +48,8 @@ node tests/course-page.cjs
 | コースの初期値とWi-Fi経由の編集 | [CourseConfig.h](../StopWatchTourGuide/CourseConfig.h)、[WifiCourseEditor.cpp](../StopWatchTourGuide/src/WifiCourseEditor.cpp)、[CoursePage.h](../StopWatchTourGuide/src/CoursePage.h) |
 | 完了記録の保存と復元 | [RecordStore.cpp](../StopWatchTourGuide/src/RecordStore.cpp) |
 
+出力ピンを追加するときは、本体の配線も確認してください。たとえば `digitalPinHasPWM(48)` は真を返しますが、GPIO48は内部I²CのSCL、GPIO47は同じバスのSDAに使われています。[StopWatchのピン割り当て](https://docs.m5stack.com/ja/core/StopWatch)
+
 終了日時を指定した場合は開始時に内蔵時計から終了までの秒数を求めます。持ち時間を指定した場合は、その秒数を開始時の残り時間として使います。いずれも単調時計で経過時間を計り、ミリ秒単位で記録します。画面では残り時間を秒単位で切り上げ、所要時間と超過時間は切り捨てます。
 
 [時刻の計算例と振動の条件](../stopwatch-tour-guide-spec.md)
