@@ -9,6 +9,7 @@
 #include <algorithm>
 #include "../CourseConfig.h"
 #include "App.h"
+#include "DisplayState.h"
 #include "UsbCommands.h"
 #include "WatchUi.h"
 
@@ -85,9 +86,9 @@ bool rtcPowerHold = false;
 int rtcBootFlags = -1;
 const char* panelStartup = "not checked";
 uint16_t firstCanvasPixel = 0, firstDisplayPixel = 0;
-uint8_t motorLevel = 0, brightness = 160;
-Millis lastFrame = 0, lastActivity = 0;
-Screen touchScreen = Screen::Standby;
+DisplayState displayState;
+uint8_t motorLevel = 0;
+Millis lastFrame = 0;
 Millis monotonic() { return static_cast<Millis>(esp_timer_get_time() / 1000); }
 void logStage(const char* stage) {
   bootStage = stage;
@@ -121,6 +122,22 @@ bool retainRtcPower(m5::M5PM1_Class& pmic) {
     if (pmic.setLDOOutput(true) && pmic.bitOn(0x07, ldoHold)
         && pmic.readRegister(0x06, &power, 1) && (power & ldoEnable)
         && pmic.readRegister(0x07, &hold, 1) && (hold & ldoHold)) return true;
+    delay(2);
+  }
+  return false;
+}
+
+bool enablePowerButtonClicks(m5::M5PM1_Class& pmic) {
+  // PM1 only latches click events while a GPIO is assigned to IRQ.
+  // On C152 that pin is PMG1 (ESP32 G12). M5.update() polls its status.
+  constexpr uint8_t buttonIrqMask = 0x45, singleClick = 1u << 0;
+  constexpr uint8_t buttonConfig = 0x49, disableSingleReset = 1u << 0;
+  for (int attempt = 0; attempt < 3; ++attempt) {
+    uint8_t config = 0;
+    if (pmic.setGPIOFunction(m5::M5PM1_Class::gpio1, m5::M5PM1_Class::irq)
+        && pmic.bitOff(buttonIrqMask, singleClick)
+        && pmic.bitOn(buttonConfig, disableSingleReset)
+        && pmic.readRegister(buttonConfig, &config, 1) && (config & disableSingleReset)) return true;
     delay(2);
   }
   return false;
@@ -244,6 +261,7 @@ void deviceSetup() {
   cfg.internal_spk = false;
   cfg.internal_mic = false;
   M5.begin(cfg);
+  if (!enablePowerButtonClicks(M5.Power.M5pm1)) Serial.println("[tour] power button setup failed");
   rtcPowerHold = retainRtcPower(M5.Power.M5pm1);
   if (M5.getDisplayCount() == 0) {
     logStage("display init failed");
@@ -255,7 +273,7 @@ void deviceSetup() {
   M5.Display.setRotation(0);
   configureWatchTouch(*M5.Display.getPanel());
   wakeStopWatchPanel();
-  M5.Display.setBrightness(brightness);
+  M5.Display.setBrightness(DisplayState::normalBrightness);
   // Debouncing and 0.8-second semantics are provided by the portable Button.
   M5.BtnA.setDebounceThresh(0);
   M5.BtnB.setDebounceThresh(0);
@@ -275,10 +293,10 @@ void deviceSetup() {
   }
   if (auto* chip = M5.Rtc.getRtcInstancePtr()) rtcBootFlags = readRegister(*chip, 0x1D);
   app.begin();
-  lastActivity = monotonic();
-  lastFrame = lastActivity;
+  lastFrame = monotonic();
+  displayState.noteActivity(lastFrame);
   logStage("drawing first frame");
-  render(lastActivity);
+  render(lastFrame);
   // Sample the filled clock control away from its text.
   firstCanvasPixel = canvas.readPixel(108, 112);
   firstDisplayPixel = M5.Display.readPixel(108, 112);
@@ -304,24 +322,23 @@ void deviceLoop() {
   const auto a = buttonA.update(M5.BtnA.isPressed(),now);
   const auto b = buttonB.update(M5.BtnB.isPressed(),now);
   const bool action = a.shortPress || a.longPress || b.shortPress;
-  if (action || M5.BtnA.isPressed() || M5.BtnB.isPressed()) lastActivity = now;
   // Storage may take time; switch the motor off before the synchronous save.
   if (a.longPress && app.screen() == Screen::Running) setMotor(0);
   const auto& touch = M5.Touch.getDetail();
-  if (touch.wasPressed()) touchScreen = app.screen();
-  if (touch.isPressed()) lastActivity = now;
+  if (touch.wasPressed()) displayState.beginTouch(app.screen());
+  if (action || M5.BtnA.isPressed() || M5.BtnB.isPressed() || touch.isPressed())
+    displayState.noteActivity(now);
+  const bool powerClick = M5.BtnPWR.wasClicked() && !M5.Power.M5pm1.wasPekDoubleClicked();
+  if (powerClick) displayState.toggle(now);
   app.update(now,{a.shortPress,a.longPress,b.shortPress});
-  const bool released = touch.wasReleased() && touchScreen == app.screen();
+  const bool released = touch.wasReleased() && displayState.endTouch(app.screen());
   if (released) app.releaseTouch(touch.base_x, touch.base_y, touch.x, touch.y, now);
   setMotor(app.motor(monotonic()));
-  const uint8_t wantedBrightness = now-lastActivity >= 30000 ? 35 : 160;
-  if (wantedBrightness != brightness) {
-    brightness = wantedBrightness;
-    M5.Display.setBrightness(brightness);
-  }
-  if (action || released || app.needsTimeRefresh(lastFrame, now)) {
+  if (!displayState.off() && (powerClick || action || released || app.needsTimeRefresh(lastFrame, now))) {
     render(now);
     lastFrame = now;
   }
+  const auto brightness = displayState.brightness(now);
+  if (M5.Display.getBrightness() != brightness) M5.Display.setBrightness(brightness);
   // No delay(), sleep or blocking vibration sequence: input/timers keep running.
 }

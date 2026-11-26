@@ -1,4 +1,5 @@
 #include "App.h"
+#include "DisplayState.h"
 #include "UsbCommands.h"
 #include "../StopWatchTourGuide/CourseConfig.h"
 #include <algorithm>
@@ -342,6 +343,40 @@ void holdAcrossScreens() {
   CHECK(!app.unsaved());
   app.update(4100,question); // B returns to standby.
   CHECK(app.screen()==Screen::Standby && !app.deadlineConfirmed());
+}
+void displayOffDuringTour() {
+  FakeBlobs blobs; RecordStore store(blobs); FakeClock rtc; FakeEditor editor;
+  App app(configuredCourse(), rtc, store, editor);
+  app.begin();
+  confirmDeadline(app);
+  DisplayState display;
+  CHECK(display.brightness(29999) == 160 && display.brightness(30000) == 35);
+
+  // Turn off from auto-dim, with a finger on the screen.
+  display.beginTouch(app.screen());
+  display.toggle(31000);
+  CHECK(display.off() && display.brightness(31000) == 0);
+  CHECK(!display.endTouch(app.screen()));
+  display.beginTouch(app.screen());  // A touch started in the dark cannot act on wake.
+  display.toggle(65000);
+  CHECK(!display.off() && display.brightness(65000) == 160);
+  CHECK(!display.endTouch(app.screen()));
+  CHECK(app.screen() == Screen::Standby && app.deadlineConfirmed());
+  display.beginTouch(app.screen());
+  CHECK(display.endTouch(app.screen()));
+
+  app.update(70000, finish); // A long press starts the confirmed tour.
+  display.toggle(71000);
+  app.update(100000, question);
+  display.noteActivity(100000);
+  CHECK(display.brightness(100000) == 0);
+  app.update(970000); // The deadline still vibrates with the display off.
+  CHECK(app.motor(970000) != 0);
+  display.toggle(971000);
+  CHECK(app.screen() == Screen::Running && app.tour().remainingMs(971000) == -1000);
+  CHECK(app.tour().record().questions.size() == 1);
+  CHECK(app.tour().record().questions.front().elapsed == 30000);
+  CHECK(display.brightness(1000999) == 160 && display.brightness(1001000) == 35);
 }
 void delayAndPriority() {
   auto t=started();
@@ -889,7 +924,8 @@ int main(int argc, char** argv) {
     {"締切超過",overtime},{"質問と入力",questionsDuringVibration},{"途中で終了",earlyFinish},
     {"日またぎと不正設定",midnightAndInvalidSettings},{"保存と復帰",persistenceAndReboot},
     {"同時入力の帰属",simultaneousInputs},{"長押し・チャタリング",longPressAndBounce},
-    {"画面遷移をまたぐ長押し",holdAcrossScreens},{"処理遅延・通知優先",delayAndPriority},
+    {"画面遷移をまたぐ長押し",holdAcrossScreens},{"消灯・復帰と計時の継続",displayOffDuringTour},
+    {"処理遅延・通知優先",delayAndPriority},
     {"区間超過の通知と優先順位",segmentExpiryPriority},
     {"短い区間・最終区間",shortAndLastSegments},{"振動パターンと割込み",hapticPatterns},
     {"保存失敗・全中断位置・破損",storageFailuresAndCorruption},{"レコードの検証",recordValidation},
